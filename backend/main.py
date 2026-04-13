@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import numpy as np
+from sklearn.decomposition import PCA as SklearnPCA
 
 from backend.model import PCAManager, MNISTManager
 from backend.utils import (
@@ -74,6 +75,55 @@ async def process_image_file(
         n_components = max(1, min(n_components, max_allowed))
         result = patch_pca_compress(contents, n_components=n_components, patch_size=patch_size)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/sweep_mnist")
+def sweep_mnist(k_max: int = 100, k_step: int = 2):
+    """
+    Fit PCA once with k_max on MNIST, then compute MSE, variance%, and
+    compression_ratio for k = 1..k_max (step k_step) on a random sample.
+    Returns ready-to-chart data for the Analytics page.
+    """
+    try:
+        # 1. Load data + random sample
+        data = MNISTManager.get_data(max_samples=2000)
+        sample = data[np.random.randint(0, len(data))]  # shape (784,)
+
+        # 2. Fit ONE PCA with k_max components (reuse if cached)
+        k_max_clamped = min(k_max, 150)
+        if k_max_clamped not in PCAManager._cache:
+            pca_full = SklearnPCA(n_components=k_max_clamped, whiten=True, svd_solver='randomized')
+            pca_full.fit(data)
+            PCAManager._cache[k_max_clamped] = pca_full
+        pca_full = PCAManager._cache[k_max_clamped]
+
+        # cumulative explained variance ratios from the full model
+        cum_var = np.cumsum(pca_full.explained_variance_ratio_) * 100  # shape (k_max,)
+
+        # project sample into full latent space once
+        sample_2d = sample.reshape(1, -1)
+        z_full = pca_full.transform(sample_2d)  # (1, k_max)
+
+        points = []
+        for k in range(1, k_max_clamped + 1, k_step):
+            # reconstruct using only first k components
+            z_k = z_full.copy()
+            z_k[:, k:] = 0  # zero out remaining components
+            recon = pca_full.inverse_transform(z_k)
+            mse = float(np.mean((sample - recon[0]) ** 2))
+            variance_pct = float(cum_var[k - 1])
+            comp_ratio = round(784 / k, 2)
+            quality_score = max(0.0, min(100.0, 100.0 - mse * 2000))
+            points.append({
+                "k": k,
+                "mse": round(mse, 6),
+                "variance_pct": round(variance_pct, 2),
+                "compression_ratio": comp_ratio,
+                "quality_score": round(quality_score, 1),
+            })
+
+        return {"sweep": points, "k_max": k_max_clamped, "total_dims": 784}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -46,4 +46,10 @@ export const processHDImage = async (file, n_components, patch_size = 8) => {
   return response.data;
 };
 
+// Fetch k-sweep analytics (MSE, variance, compression_ratio for k=1..k_max)
+export const fetchSweep = async (k_max = 100, k_step = 2) => {
+  const response = await api.get(`/api/sweep_mnist?k_max=${k_max}&k_step=${k_step}`);
+  return response.data;
+};
+
 export default api;

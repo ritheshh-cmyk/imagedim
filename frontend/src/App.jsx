@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
+import Analytics from './pages/Analytics';
+import Theory from './pages/Theory';
 import './index.css';
 
 const AppLayout = () => {
@@ -15,6 +17,8 @@ const AppLayout = () => {
         <Routes>
           <Route path="/"          element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/theory"    element={<Theory />} />
         </Routes>
       </main>
     </div>
