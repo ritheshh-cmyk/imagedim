@@ -1,66 +1,265 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import gsap from 'gsap';
 import {
   Download, RefreshCw, SlidersHorizontal, Image as ImageIcon,
-  Loader2, Upload, X, ChevronRight, Info,
+  Loader2, Upload, X, ChevronRight, Info, Layers, GitBranch,
+  Cpu, BarChart2, ScanLine, Wifi, WifiOff,
 } from 'lucide-react';
 import { getSampleImage, processImage, processHDImage } from '../api';
 
-/* ── Inline helpers ── */
-const Divider = () => <div style={{ borderTop: '1px solid #F3F4F6', margin: '16px 0' }} />;
+/* ═══════════════════════════════════════════
+   HELPER COMPONENTS
+═══════════════════════════════════════════ */
 
-const SectionHeader = ({ icon, children }) => (
+const Divider = () => <div style={{ borderTop: '1px solid #F3F4F6', margin: '12px 0' }} />;
+
+const MetaRow = ({ label, value, highlight, mono = true }) => (
+  <div className="meta-row">
+    <span className="meta-label">{label}</span>
+    <span className={`meta-value${highlight ? ' highlight' : ''}`}
+      style={!mono ? { fontFamily: 'Inter, sans-serif' } : {}}>{value}</span>
+  </div>
+);
+
+const StatChip = ({ label, value, sub, delay = 0 }) => (
+  <div className="stat-chip" style={{ animationDelay: `${delay}ms` }}>
+    <span className="stat-chip-label">{label}</span>
+    <span className="stat-chip-value">{value}</span>
+    {sub && <span className="stat-chip-sub">{sub}</span>}
+  </div>
+);
+
+const SectionHdr = ({ icon, children }) => (
   <div className="section-header">
-    {icon && <span style={{ color: '#9CA3AF' }}>{icon}</span>}
+    {icon && <span style={{ color: '#9CA3AF', display: 'flex', alignItems: 'center' }}>{icon}</span>}
     {children}
   </div>
 );
 
-/* ── Quality bar ── */
+const ImagePlaceholder = ({ label }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '12px', color: '#D1D5DB' }}>
+    <ImageIcon size={48} strokeWidth={1} />
+    <p style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#D1D5DB' }}>{label}</p>
+  </div>
+);
+
+/* Quality bar */
 const QualityBar = ({ score }) => {
-  const color = score >= 70 ? '#059669' : score >= 40 ? '#D97706' : '#DC2626';
+  const isHigh = score >= 70; const isMid = score >= 40;
+  const color = isHigh ? '#10B981' : isMid ? '#F59E0B' : '#EF4444';
+  const label = isHigh ? 'High Fidelity' : isMid ? 'Medium Fidelity' : 'Low Fidelity';
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-        <span style={{ fontSize: '0.6875rem', fontWeight: '700', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9CA3AF' }}>
-          Fidelity Score
-        </span>
-        <span style={{ fontSize: '0.875rem', fontWeight: '700', color, fontFamily: "'JetBrains Mono', monospace" }}>
-          {score.toFixed(0)}%
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF' }}>Visual Fidelity</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, display: 'inline-block' }} />
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color, fontFamily: 'JetBrains Mono, monospace' }}>{score.toFixed(0)}% — {label}</span>
+        </div>
       </div>
       <div className="quality-bar-track">
-        <div className="quality-bar-fill" style={{ width: `${score}%`, background: color }} />
+        <div className={`quality-bar-fill${!isHigh && isMid ? ' mid' : !isHigh && !isMid ? ' low' : ''}`} style={{ width: `${score}%` }} />
+      </div>
+      <p style={{ marginTop: '6px', fontSize: '0.6875rem', color: '#9CA3AF', lineHeight: 1.5 }}>
+        {score >= 90 ? 'Excellent — barely distinguishable from origial.'
+          : score >= 70 ? 'Good — minor blurring in fine-detail areas.'
+          : score >= 50 ? 'Moderate — visible block artifacts, text may blur.'
+          : 'Low — heavy compression; clear quality loss visible.'}
+      </p>
+    </div>
+  );
+};
+
+/* Dim reduction visual */
+const DimReductionBar = ({ original, compressed }) => {
+  const pct = Math.round((compressed / original) * 100);
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF' }}>Dimension Reduction</span>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.75rem', fontWeight: 700, color: '#374151' }}>{original}D → {compressed}D</span>
+      </div>
+      <div className="dim-bar-outer">
+        <div className="dim-bar-inner" style={{ width: `${pct}%` }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+        <span style={{ fontSize: '0.625rem', color: '#D1D5DB', fontFamily: 'JetBrains Mono, monospace' }}>Original ({original}D)</span>
+        <span style={{ fontSize: '0.625rem', color: '#374151', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>Compressed ({pct}% of dims)</span>
       </div>
     </div>
   );
 };
 
-/* ── Stat chip ── */
-const StatChip = ({ label, value, sub }) => (
-  <div className="stat-chip">
-    <span className="stat-chip-label">{label}</span>
-    <span className="stat-chip-value">{value}</span>
-    {sub && <span style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '2px' }}>{sub}</span>}
-  </div>
-);
+/* ═══════════════════════════════════════════
+   DETAILED PIPELINE COMPONENT
+═══════════════════════════════════════════ */
+const ModelPipeline = ({ results, isHD, patchSize, components }) => {
+  const containerRef = useRef(null);
+  const patchDim = patchSize * patchSize * 3;
+  const totalDims = results?.n_patches ? results.n_patches * patchDim : null;
+  const compressedDims = results?.n_patches ? results.n_patches * components : null;
 
-/* ── Image placeholder ── */
-const ImagePlaceholder = ({ label }) => (
-  <div style={{
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    height: '240px', gap: '10px', color: '#D1D5DB',
-  }}>
-    <ImageIcon size={40} strokeWidth={1} />
-    <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#D1D5DB' }}>
-      {label}
-    </p>
-  </div>
-);
+  useEffect(() => {
+    if (!results || !containerRef.current) return;
+    const cards = containerRef.current.querySelectorAll('.pipeline-step-card');
+    gsap.fromTo(cards,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.45, stagger: 0.12, ease: 'power3.out', delay: 0.1 }
+    );
+  }, [results]);
 
-/* ══════════════════════════════════════════════
+  const isOn = !!results;
+
+  const steps = isHD ? [
+    {
+      icon: <Layers size={16} />,
+      title: 'Input Image',
+      value: results?.original_resolution ?? '—',
+      details: [
+        { l: 'Color Mode', v: 'RGB · 3 channels' },
+        { l: 'Source', v: 'User Upload' },
+        { l: 'Format', v: 'JPEG / PNG / WebP' },
+      ],
+    },
+    {
+      icon: <GitBranch size={16} />,
+      title: 'Patch Extraction',
+      value: `${results?.n_patches?.toLocaleString() ?? '—'} patches`,
+      details: [
+        { l: 'Patch Size', v: `${patchSize}×${patchSize}px` },
+        { l: 'Vector Dim', v: `${patchDim}D per patch` },
+        { l: 'PCA Subset', v: `≤ 2,500 patches used for fit` },
+      ],
+    },
+    {
+      icon: <Cpu size={16} />,
+      title: 'PCA Fit (SVD)',
+      value: 'Randomised SVD',
+      details: [
+        { l: 'Algorithm', v: 'sklearn RandomizedSVD' },
+        { l: 'Input Dim', v: `${patchDim}D` },
+        { l: 'Complexity', v: 'O(n·k) — not O(n³)' },
+      ],
+    },
+    {
+      icon: <BarChart2 size={16} />,
+      title: 'Latent Space',
+      value: `${patchDim}D → ${components}D`,
+      details: [
+        { l: 'Formula', v: 'z = (x − μ) · W' },
+        { l: 'k components', v: String(components) },
+        { l: 'Ratio', v: `${(patchDim / components).toFixed(1)}× per patch` },
+      ],
+    },
+    {
+      icon: <ScanLine size={16} />,
+      title: 'PCA Output',
+      value: results?.variance_retained_pct ? `${results.variance_retained_pct.toFixed(1)}% variance` : `MSE ${results?.mse?.toFixed(2) ?? '—'}`,
+      details: [
+        { l: 'Formula', v: 'x̂ = z · Wᵀ + μ' },
+        { l: 'Compression', v: `${results?.compression_ratio?.toFixed(2) ?? '—'}×` },
+        { l: 'MSE Loss', v: results?.mse?.toFixed(4) ?? '—' },
+      ],
+    },
+  ] : [
+    {
+      icon: <Layers size={16} />, title: 'MNIST Digit',
+      value: '28×28 = 784D',
+      details: [
+        { l: 'Grayscale', v: 'Single channel [0, 1]' },
+        { l: 'Source', v: 'fetch_openml · random sample' },
+        { l: 'Normalised', v: '÷ 255.0' },
+      ],
+    },
+    {
+      icon: <Cpu size={16} />, title: 'PCA Fit',
+      value: '2,000 MNIST samples',
+      details: [
+        { l: 'Algorithm', v: 'Randomised SVD + whitening' },
+        { l: 'Input Dim', v: '784D' },
+        { l: 'Model Size', v: `784×${components} weights` },
+      ],
+    },
+    {
+      icon: <BarChart2 size={16} />, title: 'Latent Code',
+      value: `784D → ${components}D`,
+      details: [
+        { l: 'z = (x − μ) · W', v: '' },
+        { l: 'k components', v: String(components) },
+        { l: 'Ratio', v: `${(784 / components).toFixed(1)}× per vector` },
+      ],
+    },
+    {
+      icon: <ScanLine size={16} />, title: 'PCA Output',
+      value: `784D restored`,
+      details: [
+        { l: 'x̂ = z · Wᵀ + μ', v: '' },
+        { l: 'Compression', v: `${results?.compression_ratio?.toFixed(2) ?? '—'}×` },
+        { l: 'MSE Loss', v: results?.mse?.toFixed(6) ?? '—' },
+      ],
+    },
+  ];
+
+  return (
+    <div ref={containerRef} style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+      <div style={{ display: 'flex', gap: '0', minWidth: `${steps.length * 200}px` }}>
+        {steps.map((step, i) => (
+          <React.Fragment key={i}>
+            <div className={`pipeline-step-card${isOn ? ' step-on' : ''}${i === steps.length - 1 ? ' step-last' : ''}`}>
+              <span className="step-number-badge">{String(i + 1).padStart(2, '0')}</span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', marginBottom: '4px', color: i === steps.length - 1 && isOn ? '#9CA3AF' : '#374151' }}>
+                {step.icon}
+              </div>
+              <div className="step-title">{step.title}</div>
+              <div className="step-value">{step.value}</div>
+
+              <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {step.details.filter(d => d.l).map((d, j) => (
+                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
+                    <span className="step-detail">{d.l}</span>
+                    {d.v && <span className="step-detail" style={{ fontWeight: 600, textAlign: 'right' }}>{d.v}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {i < steps.length - 1 && (
+              <div className="step-arrow">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <line x1="0" y1="16" x2="24" y2="16" className={`pipeline-connector${isOn ? ' active' : ''}`} />
+                  <path d="M20 12 L26 16 L20 20" stroke={isOn ? '#374151' : '#D1D5DB'} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Compression math */}
+      {results && isHD && totalDims && compressedDims && (
+        <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px' }}>
+          {[
+            { l: 'Raw Patch Data', v: `${(totalDims / 1000).toFixed(0)}K floats`, sub: `${results.n_patches} × ${patchDim}` },
+            { l: 'Latent Codes', v: `${(compressedDims / 1000).toFixed(0)}K floats`, sub: `${results.n_patches} × ${components}` },
+            { l: 'Actual Saving', v: `${(totalDims / compressedDims).toFixed(1)}× patch reduction`, sub: 'codes only, excluding model weights' },
+          ].map((m, i) => (
+            <div key={i} style={{ background: '#FAFAFA', border: '1px solid #F3F4F6', borderRadius: '10px', padding: '12px' }}>
+              <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', marginBottom: '4px' }}>{m.l}</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>{m.v}</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#9CA3AF', marginTop: '2px' }}>{m.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════
    DASHBOARD
-═══════════════════════════════════════════════ */
-function Dashboard() {
+═══════════════════════════════════════════ */
+export default function Dashboard() {
   const [components, setComponents]         = useState(20);
   const [patchSize, setPatchSize]           = useState(8);
   const [isProcessing, setIsProcessing]     = useState(false);
@@ -71,13 +270,27 @@ function Dashboard() {
   const [isDragging, setIsDragging]         = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [isUploadedMode, setIsUploadedMode] = useState(false);
+  const [backendOnline, setBackendOnline]   = useState(null); // null = unknown
 
   const fileInputRef = useRef(null);
+  const metricsRef   = useRef(null);
 
-  /* ── Initial load ── */
+  /* Backend ping */
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/docs').then(() => setBackendOnline(true)).catch(() => setBackendOnline(false));
+  }, []);
+
+  /* Initial load */
   useEffect(() => { handleLoadSample(); }, []);
 
-  /* ── Run compression ── */
+  /* GSAP animate metrics when results change */
+  useEffect(() => {
+    if (!results || !metricsRef.current) return;
+    const chips = metricsRef.current.querySelectorAll('.stat-chip');
+    gsap.fromTo(chips, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: 'power2.out' });
+  }, [results]);
+
+  /* Run PCA */
   const runProcess = useCallback(async (n_components, sampleData, isUpload, patch_size = patchSize) => {
     if (!sampleData) return;
     try {
@@ -88,20 +301,17 @@ function Dashboard() {
       } else {
         data = await processImage(n_components, sampleData);
       }
-      setResults(data);
+      setResults(data); setBackendOnline(true);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Processing failed. Is the backend running?');
-    } finally {
-      setIsProcessing(false);
-    }
+      setBackendOnline(false);
+      setError(err.response?.data?.detail || 'Cannot reach backend — run: uvicorn backend.main:app --reload');
+    } finally { setIsProcessing(false); }
   }, [patchSize]);
 
-  /* ── Slider debounce ── */
+  /* Slider debounce */
   useEffect(() => {
     const delay = isUploadedMode ? 700 : 280;
-    const t = setTimeout(() => {
-      if (currentSample) runProcess(components, currentSample, isUploadedMode);
-    }, delay);
+    const t = setTimeout(() => { if (currentSample) runProcess(components, currentSample, isUploadedMode); }, delay);
     return () => clearTimeout(t);
   }, [components, patchSize]);
 
@@ -112,6 +322,7 @@ function Dashboard() {
       setCurrentSample(sample);
       await runProcess(components, sample, false);
     } catch {
+      setBackendOnline(false);
       setError('Cannot reach backend. Run: uvicorn backend.main:app --reload');
     } finally { setIsProcessing(false); }
   };
@@ -124,43 +335,83 @@ function Dashboard() {
       setIsUploadedMode(true); setCurrentSample(file);
       await runProcess(8, file, true, patchSize);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Upload failed.');
-      setUploadedFileName('');
+      setError(err.response?.data?.detail || 'Upload failed.'); setUploadedFileName('');
     } finally { setIsUploading(false); }
   }, [patchSize]);
 
-  const onFileChange  = (e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; };
-  const onDragOver    = (e) => { e.preventDefault(); setIsDragging(true); };
-  const onDragLeave   = () => setIsDragging(false);
-  const onDrop        = (e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleFileUpload(f); };
+  const onFileChange = (e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; };
+  const onDragOver  = (e) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave = () => setIsDragging(false);
+  const onDrop      = (e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleFileUpload(f); };
 
   const handleDownload = () => {
     if (!results) return;
-    const a = document.createElement('a'); a.href = results.reconstructed_image_b64;
-    a.download = `pca_compressed_${components}k.png`; a.click();
+    const a = document.createElement('a');
+    a.href = results.reconstructed_image_b64; a.download = `pca_k${components}_output.png`; a.click();
   };
 
-  /* ── Derived metrics ── */
   const qualityScore = results
-    ? (results.variance_retained_pct != null
-        ? results.variance_retained_pct
-        : Math.max(0, 100 - (results.mse ?? 0) * 800))
+    ? Math.min(100, Math.max(0, results.variance_retained_pct ?? Math.max(0, 100 - (results.mse ?? 0) * 800)))
     : 0;
 
-  const busy = isProcessing || isUploading;
-  const isHDMode = isUploadedMode && results?.original_resolution;
+  const busy     = isProcessing || isUploading;
+  const isHDMode = isUploadedMode && (results?.original_resolution || isUploading);
+  const patchDim = patchSize * patchSize * 3;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F9FAFB', paddingTop: '80px' }}>
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px 80px' }}>
+    <div style={{ minHeight: '100vh', background: '#F5F6F8', paddingTop: '72px' }}>
+
+      {/* ── Status bar ── */}
+      <div style={{ borderBottom: '1px solid #EAECEF', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: '72px', zIndex: 30 }}>
+        <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '8px 24px', display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* Backend status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {backendOnline === null ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#9CA3AF' }}>
+                  <Wifi size={12} /> Connecting…
+                </span>
+              ) : backendOnline ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#059669', fontWeight: 600 }}>
+                  <span className="live-dot" /> Backend Online
+                </span>
+              ) : (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#DC2626', fontWeight: 600 }}>
+                  <WifiOff size={12} /> Backend Offline
+                </span>
+              )}
+            </div>
+            <span style={{ width: '1px', height: '14px', background: '#E5E7EB' }} />
+            {/* Mode */}
+            <span className="tag">{isHDMode ? '📸 HD Upload Mode' : '🔢 MNIST Demo Mode'}</span>
+            {/* Processing */}
+            {busy && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#6B7280', fontWeight: 600 }}>
+                <Loader2 size={12} className="animate-spin" /> Processing…
+              </span>
+            )}
+          </div>
+          {results && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="tag">k = {results.n_components}</span>
+              <span className="tag">{results.compression_ratio.toFixed(1)}× compression</span>
+              {results.variance_retained_pct != null && (
+                <span className="tag">{results.variance_retained_pct.toFixed(1)}% variance retained</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '28px 24px 80px' }}>
 
         {/* ── Page Header ── */}
-        <header style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#111827', letterSpacing: '-0.03em', marginBottom: '6px' }}>
-            PCA Compression Dashboard
+        <header style={{ marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 900, color: '#111827', letterSpacing: '-0.04em' }}>
+            PCA Compression Lab
           </h1>
-          <p style={{ fontSize: '0.875rem', color: '#9CA3AF' }}>
-            Upload any image · Adjust components · Watch quality trade-offs in real time
+          <p style={{ fontSize: '0.875rem', color: '#9CA3AF', marginTop: '4px' }}>
+            Upload an image or use MNIST · Adjust k components · Observe quality vs size trade-off in real time
           </p>
         </header>
 
@@ -168,287 +419,298 @@ function Dashboard() {
         {error && (
           <div style={{
             background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626',
-            padding: '12px 16px', borderRadius: '10px', marginBottom: '24px',
+            padding: '12px 16px', borderRadius: '12px', marginBottom: '20px',
             display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8125rem',
           }}>
-            <X size={15} style={{ flexShrink: 0 }} /> {error}
+            <X size={14} style={{ flexShrink: 0 }} /> {error}
           </div>
         )}
 
-        {/* ══ MAIN 3-COLUMN GRID ══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        {/* ══ ROW 1: Controls + Images ══ */}
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
 
-          {/* ── Column 1: Controls ── */}
-          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-            <SectionHeader icon={<SlidersHorizontal size={14} />}>Controls</SectionHeader>
+          {/* ── Controls ── */}
+          <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+            <SectionHdr icon={<SlidersHorizontal size={13} />}>Controls</SectionHdr>
 
-            {/* Components slider */}
-            <div style={{ marginBottom: '20px' }}>
+            {/* k slider */}
+            <div style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280' }}>
+                <label style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280' }}>
                   Components (k)
                 </label>
-                <span style={{
-                  background: '#111827', color: '#FFFFFF', borderRadius: '6px',
-                  padding: '2px 10px', fontSize: '0.8125rem', fontWeight: '700',
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>{components}</span>
+                <div style={{ background: '#111827', color: '#FFFFFF', borderRadius: '7px', padding: '3px 10px', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.875rem', fontWeight: 800 }}>
+                  {components}
+                </div>
               </div>
               <input
                 type="range" min="1" max={isUploadedMode ? 200 : 150}
                 value={components} onChange={(e) => setComponents(+e.target.value)}
-                style={{ width: '100%' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.625rem', color: '#D1D5DB', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>
-                <span>1 — max compress</span>
-                <span>{isUploadedMode ? '200' : '150'} — max fidelity</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.625rem', color: '#D1D5DB', fontFamily: 'JetBrains Mono, monospace' }}>
+                <span>1 — smallest</span>
+                <span>{isUploadedMode ? 200 : 150} — sharpest</span>
               </div>
-              <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '8px', lineHeight: '1.5' }}>
-                Fewer components = smaller file, lower quality. More = larger file, sharper output.
+              <p style={{ marginTop: '8px', fontSize: '0.6875rem', color: '#9CA3AF', lineHeight: 1.5 }}>
+                Fewer = smaller file + blurrier. More = larger file + sharper.
               </p>
             </div>
 
             <Divider />
 
-            {/* Patch size — only for HD uploads */}
+            {/* DimBar */}
+            <div style={{ marginBottom: '16px' }}>
+              <DimReductionBar original={isUploadedMode ? patchDim : 784} compressed={components} />
+            </div>
+
+            <Divider />
+
+            {/* Patch size (HD mode only) */}
             {isUploadedMode && (
               <>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280', display: 'block', marginBottom: '8px' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280', display: 'block', marginBottom: '8px' }}>
                     Patch Size
                   </label>
                   <div className="patch-radio-group">
                     {[4, 8, 16].map(sz => (
-                      <button
-                        key={sz}
+                      <button key={sz} disabled={busy}
                         onClick={() => { setPatchSize(sz); if (currentSample) runProcess(components, currentSample, true, sz); }}
                         className={`patch-radio-btn${patchSize === sz ? ' selected' : ''}`}
-                        disabled={busy}
                       >
                         {sz}px
                       </button>
                     ))}
                   </div>
-                  <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '6px', lineHeight: '1.5' }}>
-                    Patch size controls vector dimensionality: 4px=48D, 8px=192D, 16px=768D
-                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.625rem', color: '#9CA3AF', fontFamily: 'JetBrains Mono, monospace' }}>
+                    <span>4px=48D</span><span>8px=192D</span><span>16px=768D</span>
+                  </div>
                 </div>
                 <Divider />
               </>
             )}
 
-            {/* Buttons */}
-            <button
-              onClick={handleLoadSample} disabled={busy}
-              className="btn-ghost btn-sm"
-              style={{ width: '100%', justifyContent: 'center', marginBottom: '10px' }}
-            >
-              {isProcessing && !isUploading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Load Random MNIST Digit
+            {/* Actions */}
+            <button onClick={handleLoadSample} disabled={busy} className="btn-ghost btn-sm"
+              style={{ width: '100%', justifyContent: 'center', marginBottom: '10px' }}>
+              {isProcessing && !isUploading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              MNIST Demo
             </button>
 
             {/* Upload zone */}
             <div
               onClick={() => !busy && fileInputRef.current?.click()}
               onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
-              className={`upload-zone${isDragging ? ' dragging' : ''}${busy ? ' opacity-50 pointer-events-none' : ''}`}
+              className={`upload-zone${isDragging ? ' dragging' : ''}${busy ? '' : ''}`}
+              style={{ opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}
             >
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}>
                 {isUploading
-                  ? <Loader2 size={24} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
-                  : <Upload size={24} style={{ color: isDragging ? '#111827' : '#9CA3AF' }} />
+                  ? <Loader2 size={22} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+                  : <Upload size={22} style={{ color: isDragging ? '#111827' : '#9CA3AF' }} />
                 }
-                <p style={{ fontSize: '0.8125rem', fontWeight: '600', color: '#374151' }}>
-                  {isUploading ? 'Processing…' : isDragging ? 'Drop image here' : 'Upload Image'}
+                <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#374151' }}>
+                  {isUploading ? 'Processing…' : 'Upload Image'}
                 </p>
-                <p style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
-                  {isUploading ? 'Extracting RGB patches' : 'Drag & drop · JPEG, PNG, WebP'}
+                <p style={{ fontSize: '0.6875rem', color: '#9CA3AF' }}>
+                  {isDragging ? 'Drop here!' : 'JPEG · PNG · WebP · any size'}
                 </p>
                 {uploadedFileName && !isUploading && (
-                  <span style={{
-                    fontSize: '0.6875rem', fontFamily: 'JetBrains Mono, monospace',
-                    background: '#F3F4F6', color: '#374151', padding: '2px 10px',
-                    borderRadius: '9999px', maxWidth: '100%', overflow: 'hidden',
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>{uploadedFileName}</span>
+                  <span style={{ fontSize: '0.625rem', fontFamily: 'JetBrains Mono, monospace', background: '#F3F4F6', color: '#374151', padding: '2px 8px', borderRadius: '9999px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {uploadedFileName}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* ── Column 2: Original Input Image ── */}
-          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
-            <SectionHeader icon={<ImageIcon size={14} />}>Original Input</SectionHeader>
+          {/* ── ORIGINAL IMAGE ── */}
+          <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column' }}>
+            <SectionHdr icon={<ImageIcon size={13} />}>Original Input</SectionHdr>
 
-            {/* Loading skeleton */}
-            {busy && !results && (
-              <div className="skeleton" style={{ flex: 1, minHeight: '280px', borderRadius: '10px' }} />
-            )}
-
-            {/* Image */}
-            {results ? (
-              <>
-                <div className="image-frame" style={{ flex: 1, minHeight: '280px', marginBottom: '16px', position: 'relative' }}>
-                  {busy && (
-                    <div style={{
-                      position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '11px', zIndex: 5,
-                    }}>
-                      <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+            {busy && !results
+              ? <div className="skeleton" style={{ flex: 1, minHeight: '300px', borderRadius: '12px' }} />
+              : results ? (
+                <>
+                  <div className="image-frame" style={{ flex: 1, minHeight: '280px', marginBottom: '14px', position: 'relative' }}>
+                    {busy && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', zIndex: 5, backdropFilter: 'blur(4px)' }}>
+                        <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+                      </div>
+                    )}
+                    <img src={results.original_image_b64} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '300px' }} />
+                    {/* Overlay badge */}
+                    <div style={{ position: 'absolute', top: '10px', left: '10px' }}>
+                      <span className="tag" style={{ background: 'rgba(17,24,39,0.85)', color: '#FFFFFF', border: 'none', backdropFilter: 'blur(6px)' }}>
+                        ORIGINAL
+                      </span>
                     </div>
-                  )}
-                  <img
-                    src={results.original_image_b64}
-                    alt="Original input"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto', maxHeight: '320px' }}
-                  />
-                </div>
+                  </div>
 
-                {/* Metadata */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {isHDMode ? (
-                    <>
-                      <MetaRow label="Filename" value={uploadedFileName} mono />
-                      <MetaRow label="Resolution" value={results.original_resolution} mono />
-                      <MetaRow label="Color Mode" value="RGB · 3 channels" mono />
-                      <MetaRow label="Patch Dim" value={`${patchSize}×${patchSize}×3 = ${patchSize * patchSize * 3}D`} mono />
-                    </>
-                  ) : (
-                    <>
-                      <MetaRow label="Source" value="MNIST Handwritten Digit" />
-                      <MetaRow label="Dimensions" value="28×28 = 784D (grayscale)" mono />
-                      <MetaRow label="Mode" value="Flat vector · PCA direct" />
-                    </>
-                  )}
-                </div>
-              </>
-            ) : !busy ? (
-              <ImagePlaceholder label="Awaiting input…" />
-            ) : null}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    {isHDMode ? (
+                      <>
+                        <MetaRow label="File" value={uploadedFileName} />
+                        <MetaRow label="Resolution" value={results.original_resolution ?? '—'} />
+                        <MetaRow label="Mode" value={`${patchSize}×${patchSize}×3 = ${patchDim}D patches`} />
+                        <MetaRow label="Patches" value={results.n_patches?.toLocaleString() ?? '—'} />
+                      </>
+                    ) : (
+                      <>
+                        <MetaRow label="Dataset" value="MNIST Handwritten Digit" mono={false} />
+                        <MetaRow label="Dimensions" value="28×28 = 784D" />
+                        <MetaRow label="Channel" value="Grayscale · normalised [0,1]" mono={false} />
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : <ImagePlaceholder label="Awaiting input" />
+            }
           </div>
 
-          {/* ── Column 3: Compressed PCA Output ── */}
-          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
-            <SectionHeader>
-              <span style={{ color: '#9CA3AF', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <ChevronRight size={14} strokeWidth={3} />
-              </span>
-              PCA Compressed Output
-            </SectionHeader>
+          {/* ── PCA OUTPUT IMAGE ── */}
+          <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column' }}>
+            <SectionHdr icon={<ChevronRight size={13} strokeWidth={3} />}>PCA Compressed Output</SectionHdr>
 
-            {busy && !results && (
-              <div className="skeleton" style={{ flex: 1, minHeight: '280px', borderRadius: '10px' }} />
-            )}
-
-            {results ? (
-              <>
-                <div className="image-frame image-frame-output" style={{ flex: 1, minHeight: '280px', marginBottom: '16px', position: 'relative' }}>
-                  {busy && (
-                    <div style={{
-                      position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '11px', zIndex: 5,
-                    }}>
-                      <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+            {busy && !results
+              ? <div className="skeleton" style={{ flex: 1, minHeight: '300px', borderRadius: '12px' }} />
+              : results ? (
+                <>
+                  <div className="image-frame image-frame-output" style={{ flex: 1, minHeight: '280px', marginBottom: '14px', position: 'relative' }}>
+                    {busy && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '13px', zIndex: 5, backdropFilter: 'blur(4px)' }}>
+                        <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+                      </div>
+                    )}
+                    <img src={results.reconstructed_image_b64} alt="PCA compressed" style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '300px' }} />
+                    <div style={{ position: 'absolute', top: '10px', left: '10px' }}>
+                      <span className="tag" style={{ background: 'rgba(17,24,39,0.85)', color: '#FFFFFF', border: 'none', backdropFilter: 'blur(6px)' }}>
+                        k={results.n_components} OUTPUT
+                      </span>
                     </div>
-                  )}
-                  <img
-                    src={results.reconstructed_image_b64}
-                    alt="PCA compressed output"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto', maxHeight: '320px' }}
-                  />
-                </div>
+                    <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                      <span className="tag" style={{
+                        background: qualityScore >= 70 ? 'rgba(5,150,105,0.9)' : qualityScore >= 40 ? 'rgba(217,119,6,0.9)' : 'rgba(220,38,38,0.9)',
+                        color: '#FFFFFF', border: 'none', backdropFilter: 'blur(6px)'
+                      }}>
+                        {qualityScore.toFixed(0)}% fidelity
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Output metadata */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-                  <MetaRow label="Components Used" value={`k = ${results.n_components}`} mono />
-                  <MetaRow
-                    label="Compression Ratio"
-                    value={`${results.compression_ratio.toFixed(2)}×`}
-                    mono
-                    highlight
-                  />
-                  {isHDMode && results.n_patches != null && (
-                    <MetaRow label="Patches Processed" value={results.n_patches.toLocaleString()} mono />
-                  )}
-                </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '12px' }}>
+                    <MetaRow label="k Components" value={String(results.n_components)} highlight />
+                    <MetaRow label="Compression" value={`${results.compression_ratio.toFixed(2)}×`} highlight />
+                    {results.variance_retained_pct != null && <MetaRow label="Variance Kept" value={`${results.variance_retained_pct.toFixed(1)}%`} />}
+                    <MetaRow label="MSE Loss" value={results.mse.toFixed(results.mse < 1 ? 4 : 2)} />
+                  </div>
 
-                {/* Quality bar */}
-                <QualityBar score={Math.min(100, Math.max(0, qualityScore))} />
+                  <QualityBar score={Math.min(100, Math.max(0, qualityScore))} />
 
-                {/* Download */}
-                <button onClick={handleDownload} className="btn-ghost btn-sm" style={{ marginTop: '12px', width: '100%', justifyContent: 'center' }}>
-                  <Download size={13} /> Download Compressed Image
-                </button>
-              </>
-            ) : !busy ? (
-              <ImagePlaceholder label="Output appears here…" />
-            ) : null}
+                  <button onClick={handleDownload} className="btn-ghost btn-sm" style={{ marginTop: '12px', width: '100%', justifyContent: 'center' }}>
+                    <Download size={13} /> Download Output
+                  </button>
+                </>
+              ) : <ImagePlaceholder label="Output appears here" />
+            }
           </div>
         </div>
 
-        {/* ══ METRICS ROW ══ */}
+        {/* ══ ROW 2: Metrics ══ */}
         {results && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-            <StatChip
-              label="MSE Loss"
-              value={results.mse.toFixed(results.mse < 1 ? 4 : 2)}
-              sub="Mean Squared Error · lower is better"
-            />
-            <StatChip
-              label="Compression"
-              value={`${results.compression_ratio.toFixed(2)}×`}
-              sub="Original data / compressed data"
-            />
+          <div ref={metricsRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '12px', marginBottom: '16px' }}>
+            <StatChip label="MSE" value={results.mse < 1 ? results.mse.toFixed(4) : results.mse.toFixed(2)} sub="Mean Squared Error — lower is sharper" delay={0} />
+            <StatChip label="Compression" value={`${results.compression_ratio.toFixed(2)}×`} sub="Data reduction factor" delay={80} />
             {results.variance_retained_pct != null && (
-              <StatChip
-                label="Variance Retained"
-                value={`${results.variance_retained_pct.toFixed(1)}%`}
-                sub="Information preserved by top-k eigenvectors"
-              />
+              <StatChip label="Variance Retained" value={`${results.variance_retained_pct.toFixed(1)}%`} sub="Information preserved by top-k eigenvectors" delay={160} />
             )}
-            <StatChip
-              label="Components (k)"
-              value={results.n_components}
-              sub="Principal eigenvectors kept"
-            />
+            <StatChip label="k (Components)" value={String(results.n_components)} sub="Eigenvectors kept" delay={240} />
             {results.n_patches != null && (
-              <StatChip
-                label="Patches"
-                value={results.n_patches.toLocaleString()}
-                sub={`${patchSize}×${patchSize}=` + patchSize * patchSize + `D per patch per channel`}
-              />
+              <StatChip label="Patches" value={results.n_patches.toLocaleString()} sub={`Each ${patchDim}D → ${results.n_components}D`} delay={320} />
             )}
           </div>
         )}
 
-        {/* ══ EXPLANATION STRIP ══ */}
-        {results && (
-          <div className="card" style={{ padding: '20px 24px', marginBottom: '24px', background: '#FAFAFA' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <Info size={15} style={{ color: '#9CA3AF', flexShrink: 0, marginTop: '2px' }} />
-              <p style={{ fontSize: '0.8125rem', color: '#6B7280', lineHeight: '1.7', margin: 0 }}>
-                <strong style={{ color: '#374151' }}>What you're seeing:</strong> The image on the right is the PCA-compressed version
-                of the original. Using <strong style={{ color: '#374151' }}>k = {results.n_components}</strong> principal components,
-                PCA projects each {isHDMode ? `${patchSize * patchSize * 3}` : '784'}-dimensional
-                {isHDMode ? ' patch' : ' pixel vector'} into {results.n_components} dimensions,
-                then maps it back to the original space — keeping only the structure captured
-                by the top eigenvectors.
-                {results.variance_retained_pct != null &&
-                  ` This retains ${results.variance_retained_pct.toFixed(1)}% of the total image variance.`}
-                {' '}Higher k = sharper output. Lower k = smaller file, more blurring.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* ══ ROW 3: Model Pipeline ══ */}
+        <div className="glass-card" style={{ padding: '24px 28px', marginBottom: '16px' }}>
+          <SectionHdr icon={<Cpu size={13} />}>Model Pipeline — Step-by-Step Execution</SectionHdr>
 
-        {/* ══ PIPELINE FLOW GRAPH ══ */}
+          {results ? (
+            <ModelPipeline results={results} isHD={isHDMode} patchSize={patchSize} components={components} />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '40px 0', color: '#D1D5DB' }}>
+              <Cpu size={36} strokeWidth={1} />
+              <p style={{ fontSize: '0.8125rem', color: '#9CA3AF', fontWeight: 500 }}>Pipeline activates after first compression run</p>
+            </div>
+          )}
+        </div>
+
+        {/* ══ ROW 4: What Happened Explanation ══ */}
         {results && (
-          <div className="card" style={{ padding: '24px 28px' }}>
-            <SectionHeader>Model Pipeline — What Happened Step by Step</SectionHeader>
-            <PipelineFlow results={results} isHD={isHDMode} patchSize={patchSize} />
+          <div className="glass-card" style={{ padding: '24px 28px' }}>
+            <SectionHdr icon={<Info size={13} />}>What Just Happened — Plain English</SectionHdr>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+
+              {/* Explanation text */}
+              <div>
+                <p style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.75, marginBottom: '12px' }}>
+                  Your {isHDMode ? 'uploaded photo' : 'MNIST digit'} was split into{' '}
+                  <strong>{isHDMode ? results.n_patches?.toLocaleString() ?? '—' : '1'}</strong>{' '}
+                  {isHDMode ? `${patchSize}×${patchSize} pixel patches` : '28×28 pixel block'} — each becoming a{' '}
+                  <strong>{isHDMode ? patchDim : 784}-dimensional vector</strong>. PCA found the{' '}
+                  <strong>k={results.n_components}</strong> eigenvectors that capture the most variance in that space,
+                  then projected every {isHDMode ? 'patch' : 'digit vector'} onto those axes.
+                </p>
+                <p style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.75, marginBottom: '12px' }}>
+                  The result is a <strong>{results.n_components}-dimensional</strong> code per {isHDMode ? 'patch' : 'image'},
+                  versus the original <strong>{isHDMode ? patchDim : 784} dimensions</strong>.
+                  That's a <strong>{(isHDMode ? patchDim : 784) / results.n_components > 1 ? ((isHDMode ? patchDim : 784) / results.n_components).toFixed(1) : 1}× reduction per vector</strong>.
+                  The output image is built by projecting those codes back to pixel space using the transpose of W.
+                </p>
+                {results.variance_retained_pct != null && (
+                  <p style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.75 }}>
+                    The top <strong>{results.n_components} principal components</strong> captured{' '}
+                    <strong>{results.variance_retained_pct.toFixed(1)}%</strong> of total image variance.
+                    The remaining {(100 - results.variance_retained_pct).toFixed(1)}% — mostly fine texture and noise —
+                    was discarded, which is what causes the visual softening you see.
+                  </p>
+                )}
+              </div>
+
+              {/* Math summary */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ background: '#F8F9FA', border: '1px solid #F3F4F6', borderRadius: '12px', padding: '16px' }}>
+                  <p style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9CA3AF', marginBottom: '12px' }}>Compression Math</p>
+                  {[
+                    { label: 'Original dim per vector', value: `${isHDMode ? patchDim : 784}D` },
+                    { label: 'Compressed dim per vector', value: `${results.n_components}D` },
+                    { label: 'Dim reduction factor', value: `${((isHDMode ? patchDim : 784) / results.n_components).toFixed(2)}×` },
+                    { label: 'Overall data ratio', value: `${results.compression_ratio.toFixed(2)}×` },
+                    { label: 'MSE reconstruction loss', value: results.mse.toFixed(results.mse < 1 ? 6 : 3) },
+                    ...(results.variance_retained_pct != null ? [{ label: 'Variance retained', value: `${results.variance_retained_pct.toFixed(2)}%` }] : []),
+                  ].map((row, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F3F4F6' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>{row.label}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.75rem', fontWeight: 700, color: '#111827' }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Trade-off tip */}
+                <div style={{ background: results.n_components < 10 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${results.n_components < 10 ? '#FECACA' : '#BBF7D0'}`, borderRadius: '10px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '0.75rem', lineHeight: 1.6, color: results.n_components < 10 ? '#DC2626' : '#059669' }}>
+                    {results.n_components < 10
+                      ? `⚠️ Very low k=${results.n_components}. Expect heavy blurring — most image detail is discarded. Good for studying compression extremes.`
+                      : results.n_components < 30
+                      ? `👁️ k=${results.n_components} — moderate compression. Visible softening but overall structure preserved.`
+                      : `✅ k=${results.n_components} — high fidelity. Most visual details retained with ${results.compression_ratio.toFixed(1)}× data reduction.`
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -456,136 +718,3 @@ function Dashboard() {
     </div>
   );
 }
-
-/* ── Metadata row ── */
-const MetaRow = ({ label, value, mono, highlight }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#FAFAFA', borderRadius: '7px', border: '1px solid #F3F4F6' }}>
-    <span style={{ fontSize: '0.6875rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>
-      {label}
-    </span>
-    <span style={{
-      fontSize: '0.75rem', fontWeight: highlight ? '700' : '600',
-      fontFamily: mono ? "'JetBrains Mono', monospace" : 'inherit',
-      color: highlight ? '#111827' : '#374151',
-    }}>
-      {value}
-    </span>
-  </div>
-);
-
-/* ── Horizontal Pipeline Flow ── */
-const PipelineFlow = ({ results, isHD, patchSize }) => {
-  const dim = patchSize * patchSize * 3;
-
-  const steps = isHD ? [
-    {
-      n: '01',
-      title: 'Input Image',
-      detail: results.original_resolution || '—',
-      sub: 'Loaded as RGB numpy array',
-    },
-    {
-      n: '02',
-      title: 'Patch Extraction',
-      detail: `${results.n_patches?.toLocaleString() ?? '—'} patches`,
-      sub: `${patchSize}×${patchSize}×3 = ${dim}D per patch`,
-    },
-    {
-      n: '03',
-      title: 'PCA Fit',
-      detail: `Randomised SVD`,
-      sub: 'Fitted on ≤2,500 patch subset',
-    },
-    {
-      n: '04',
-      title: 'Compress',
-      detail: `${dim}D → ${results.n_components}D`,
-      sub: `${results.compression_ratio.toFixed(1)}× data reduction`,
-    },
-    {
-      n: '05',
-      title: 'PCA Output',
-      detail: `${results.variance_retained_pct?.toFixed(1) ?? '—'}% variance kept`,
-      sub: `MSE = ${results.mse.toFixed(2)}`,
-    },
-  ] : [
-    {
-      n: '01',
-      title: 'MNIST Digit',
-      detail: '28×28 = 784D',
-      sub: 'Grayscale normalised [0,1]',
-    },
-    {
-      n: '02',
-      title: 'PCA Fit',
-      detail: 'Trained on 2,000 samples',
-      sub: 'Whiten + Randomised SVD',
-    },
-    {
-      n: '03',
-      title: 'Compress',
-      detail: `784D → ${results.n_components}D`,
-      sub: `${results.compression_ratio.toFixed(1)}× reduction`,
-    },
-    {
-      n: '04',
-      title: 'PCA Output',
-      detail: `784D restored`,
-      sub: `MSE = ${results.mse.toFixed(4)}`,
-    },
-  ];
-
-  return (
-    <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: '0', minWidth: `${steps.length * 160}px` }}>
-        {steps.map((step, i) => (
-          <React.Fragment key={i}>
-            <div style={{
-              flex: 1,
-              background: i === steps.length - 1 ? '#111827' : '#FAFAFA',
-              border: `1px solid ${i === steps.length - 1 ? '#111827' : '#E5E7EB'}`,
-              borderRadius: '10px',
-              padding: '14px 16px',
-              display: 'flex', flexDirection: 'column', gap: '4px',
-              position: 'relative',
-            }}>
-              <span style={{
-                position: 'absolute', top: '-9px', left: '12px',
-                background: i === steps.length - 1 ? '#FFFFFF' : '#111827',
-                color: i === steps.length - 1 ? '#111827' : '#FFFFFF',
-                borderRadius: '9999px', width: '18px', height: '18px',
-                fontSize: '9px', fontWeight: '700', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                fontFamily: "'JetBrains Mono', monospace",
-                border: '1.5px solid ' + (i === steps.length - 1 ? '#D1D5DB' : '#111827'),
-              }}>{step.n}</span>
-              <span style={{
-                fontSize: '0.6875rem', fontWeight: '700', textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                color: i === steps.length - 1 ? '#FFFFFF' : '#111827',
-              }}>{step.title}</span>
-              <span style={{
-                fontSize: '0.75rem', fontWeight: '600',
-                fontFamily: "'JetBrains Mono', monospace",
-                color: i === steps.length - 1 ? '#E5E7EB' : '#374151',
-              }}>{step.detail}</span>
-              <span style={{
-                fontSize: '0.65rem',
-                fontFamily: "'JetBrains Mono', monospace",
-                color: i === steps.length - 1 ? '#6B7280' : '#9CA3AF',
-                lineHeight: '1.4',
-              }}>{step.sub}</span>
-            </div>
-            {i < steps.length - 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px', flexShrink: 0 }}>
-                <ChevronRight size={16} color="#D1D5DB" strokeWidth={2.5} />
-              </div>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export default Dashboard;
