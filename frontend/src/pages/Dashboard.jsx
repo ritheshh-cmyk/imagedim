@@ -456,14 +456,27 @@ export default function Dashboard() {
               MNIST Demo
             </button>
 
-            {/* Upload zone */}
-            <div
-              onClick={() => !busy && fileInputRef.current?.click()}
+            {/* Upload zone — label wraps input for native file picker */}
+            <label
+              htmlFor="upload-file-input"
               onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
-              className={`upload-zone${isDragging ? ' dragging' : ''}${busy ? '' : ''}`}
-              style={{ opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}
+              className={`upload-zone${isDragging ? ' dragging' : ''}`}
+              style={{
+                opacity: busy ? 0.6 : 1,
+                cursor: busy ? 'not-allowed' : 'pointer',
+                display: 'block',
+                pointerEvents: busy ? 'none' : 'auto',
+              }}
             >
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+              <input
+                id="upload-file-input"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={onFileChange}
+                disabled={busy}
+              />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}>
                 {isUploading
                   ? <Loader2 size={22} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
@@ -481,7 +494,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-            </div>
+            </label>
           </div>
 
           {/* ── ORIGINAL IMAGE ── */}
