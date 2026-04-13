@@ -1,62 +1,86 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ScanLine, Home, LayoutDashboard, BarChart2, BookOpen } from 'lucide-react';
-
-const navStyle = ({ isActive }) => ({
-  display: 'flex', alignItems: 'center', gap: '6px',
-  padding: '6px 14px', borderRadius: '9999px',
-  fontSize: '0.8125rem', fontWeight: 500,
-  textDecoration: 'none',
-  background: isActive ? '#111827' : 'transparent',
-  color: isActive ? '#FFFFFF' : '#6B7280',
-  transition: 'all 0.15s ease',
-  whiteSpace: 'nowrap',
-});
+import { ScanLine, LayoutDashboard, BarChart2, BookOpen, ChevronRight } from 'lucide-react';
 
 const Navbar = () => {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 12);
+    window.addEventListener('scroll', fn, { passive: true });
+    return () => window.removeEventListener('scroll', fn);
+  }, []);
+
   return (
-    <nav style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+    <header style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+      background: scrolled ? 'rgba(248,250,252,0.92)' : 'rgba(248,250,252,0.75)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      borderBottom: `1px solid ${scrolled ? '#E2E8F0' : 'transparent'}`,
+      transition: 'background .2s ease, border-color .2s ease, box-shadow .2s ease',
+      boxShadow: scrolled ? '0 1px 8px rgba(0,0,0,0.04)' : 'none',
+    }}>
       <div style={{
-        background: 'rgba(255,255,255,0.92)',
-        border: '1px solid #E5E7EB',
-        borderRadius: '9999px',
-        padding: '8px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        maxWidth: 1280, margin: '0 auto', padding: '0 24px',
+        height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '10px', paddingRight: '14px', borderRight: '1px solid #E5E7EB' }}>
-          <ScanLine size={16} color="#111827" />
-          <span style={{ fontWeight: 800, fontSize: '0.875rem', color: '#111827', letterSpacing: '-0.02em' }}>
-            PCA<span style={{ color: '#6B7280', fontWeight: 500 }}>Matrix</span>
+        <NavLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: '#0F172A',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <ScanLine size={16} color="#F8FAFC" />
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 15, color: '#0F172A', letterSpacing: '-.02em' }}>
+            PCA<span style={{ color: '#94A3B8', fontWeight: 400 }}>Matrix</span>
           </span>
-        </div>
-
-        <NavLink to="/" end style={navStyle}>
-          <Home size={13} />
-          <span>Overview</span>
         </NavLink>
 
-        <NavLink to="/dashboard" style={navStyle}>
-          <LayoutDashboard size={13} />
-          <span>Dashboard</span>
-        </NavLink>
+        {/* Nav links */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {[
+            { to: '/', label: 'Overview',  icon: null, end: true },
+            { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={13} /> },
+            { to: '/analytics', label: 'Analytics',  icon: <BarChart2 size={13} /> },
+            { to: '/theory',    label: 'Theory',     icon: <BookOpen size={13} /> },
+          ].map(({ to, label, icon, end }) => (
+            <NavLink key={to} to={to} end={end}
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 12px', borderRadius: 7,
+                fontSize: 13, fontWeight: isActive ? 600 : 400,
+                textDecoration: 'none',
+                color: isActive ? '#0F172A' : '#64748B',
+                background: isActive ? 'rgba(15,23,42,0.06)' : 'transparent',
+                transition: 'all .15s ease',
+              })}
+              onMouseEnter={e => { if (!e.currentTarget.style.background.includes('0.06')) e.currentTarget.style.background = 'rgba(15,23,42,0.04)'; e.currentTarget.style.color = '#0F172A'; }}
+              onMouseLeave={e => { if (!e.currentTarget.style.background.includes('0.06')) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B'; } }}
+            >
+              {icon}
+              {label}
+            </NavLink>
+          ))}
+        </nav>
 
-        <NavLink to="/analytics" style={navStyle}>
-          <BarChart2 size={13} />
-          <span>Analytics</span>
-        </NavLink>
-
-        <NavLink to="/theory" style={navStyle}>
-          <BookOpen size={13} />
-          <span>Theory</span>
+        {/* CTA */}
+        <NavLink to="/dashboard" style={{ textDecoration: 'none' }}>
+          <button style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: '#0F172A', color: '#F8FAFC', border: 'none',
+            borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', transition: 'transform .15s ease, background .15s ease',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.background = '#1E293B'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.background = '#0F172A'; }}
+          >
+            Try it <ChevronRight size={13} />
+          </button>
         </NavLink>
       </div>
-    </nav>
+    </header>
   );
 };
 

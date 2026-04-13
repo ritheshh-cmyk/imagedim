@@ -359,7 +359,7 @@ export default function Dashboard() {
   const patchDim = patchSize * patchSize * 3;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F6F8', paddingTop: '72px' }}>
+    <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingTop: '60px' }}>
 
 
       <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '28px 24px 80px' }}>

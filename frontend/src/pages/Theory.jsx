@@ -4,7 +4,7 @@ import { BookOpen, ArrowRight, Sigma, Grid3X3, TrendingDown, Layers, ChevronDown
 const MathBlock = ({ children, label }) => (
   <div style={{ margin: '14px 0', position: 'relative' }}>
     {label && (
-      <span style={{ position: 'absolute', top: '-10px', left: '16px', background: '#F5F6F8', padding: '0 6px', fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9CA3AF' }}>
+      <span style={{ position: 'absolute', top: '-10px', left: '16px', background: '#F8FAFC', padding: '0 6px', fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9CA3AF' }}>
         {label}
       </span>
     )}
@@ -69,7 +69,7 @@ const Highlight = ({ children }) => (
 
 export default function Theory() {
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F6F8', paddingTop: '96px', paddingBottom: '80px' }}>
+    <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingTop: '60px', paddingBottom: '80px' }}>
 
       {/* Hero */}
       <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0 24px 40px' }}>

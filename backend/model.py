@@ -81,7 +81,8 @@ class PCAManager:
             sliced.mean_               = master.mean_
             sliced.n_components_       = n_components
             sliced.n_features_in_      = master.n_features_in_
-            sliced.n_samples_fit_      = master.n_samples_fit_
+            if hasattr(master, 'n_samples_fit_'):
+                sliced.n_samples_fit_  = master.n_samples_fit_
             sliced.noise_variance_     = master.noise_variance_
             cls._cache[n_components] = sliced
             return sliced

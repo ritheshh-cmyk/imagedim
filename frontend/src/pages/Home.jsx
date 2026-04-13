@@ -131,7 +131,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div ref={heroRef} style={{ minHeight: '100vh', background: '#F5F6F8', paddingTop: '72px' }}>
+    <div ref={heroRef} style={{ minHeight: '100vh', background: '#F8FAFC', paddingTop: '60px' }}>
 
       {/* ── HERO ── */}
       <section className="hero-bg" style={{ padding: '60px 24px 80px', position: 'relative' }}>
@@ -158,9 +158,9 @@ export default function Home() {
             <button id="cta-dashboard" onClick={() => nav('/dashboard')} className="btn-primary">
               Open Compression Lab <ArrowRight size={16} />
             </button>
-            <a href="https://en.wikipedia.org/wiki/Principal_component_analysis" target="_blank" rel="noreferrer" className="btn-ghost">
+            <button id="cta-theory" onClick={() => nav('/theory')} className="btn-ghost">
               Read the Theory
-            </a>
+            </button>
           </div>
         </div>
       </section>
