@@ -3,7 +3,7 @@ import gsap from 'gsap';
 import {
   Download, RefreshCw, SlidersHorizontal, Image as ImageIcon,
   Loader2, Upload, X, ChevronRight, Info, Layers, GitBranch,
-  Cpu, BarChart2, ScanLine, Wifi, WifiOff,
+  Cpu, BarChart2, ScanLine,
 } from 'lucide-react';
 import { getSampleImage, processImage, processHDImage } from '../api';
 
@@ -361,47 +361,6 @@ export default function Dashboard() {
   return (
     <div style={{ minHeight: '100vh', background: '#F5F6F8', paddingTop: '72px' }}>
 
-      {/* ── Status bar ── */}
-      <div style={{ borderBottom: '1px solid #EAECEF', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)', position: 'sticky', top: '72px', zIndex: 30 }}>
-        <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '8px 24px', display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {/* Backend status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {backendOnline === null ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#9CA3AF' }}>
-                  <Wifi size={12} /> Connecting…
-                </span>
-              ) : backendOnline ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#059669', fontWeight: 600 }}>
-                  <span className="live-dot" /> Backend Online
-                </span>
-              ) : (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#DC2626', fontWeight: 600 }}>
-                  <WifiOff size={12} /> Backend Offline
-                </span>
-              )}
-            </div>
-            <span style={{ width: '1px', height: '14px', background: '#E5E7EB' }} />
-            {/* Mode */}
-            <span className="tag">{isHDMode ? '📸 HD Upload Mode' : '🔢 MNIST Demo Mode'}</span>
-            {/* Processing */}
-            {busy && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: '#6B7280', fontWeight: 600 }}>
-                <Loader2 size={12} className="animate-spin" /> Processing…
-              </span>
-            )}
-          </div>
-          {results && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="tag">k = {results.n_components}</span>
-              <span className="tag">{results.compression_ratio.toFixed(1)}× compression</span>
-              {results.variance_retained_pct != null && (
-                <span className="tag">{results.variance_retained_pct.toFixed(1)}% variance retained</span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
       <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '28px 24px 80px' }}>
 
