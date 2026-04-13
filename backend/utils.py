@@ -13,9 +13,10 @@ from sklearn.decomposition import PCA
 # ─────────────────────────────────────────────
 
 def ndarray_to_base64(img_array: np.ndarray) -> str:
-    """Converts a 2D [H,W] float array → grayscale PNG → base64 string."""
+    """Converts a [H,W] or [H,W,3] float array → PNG → base64 string."""
     clipped = np.clip(img_array * 255, 0, 255).astype(np.uint8)
-    pil_img = Image.fromarray(clipped, mode='L')
+    mode = 'RGB' if img_array.ndim == 3 else 'L'
+    pil_img = Image.fromarray(clipped, mode=mode)
     buf = io.BytesIO()
     pil_img.save(buf, format='PNG')
     buf.seek(0)
@@ -69,31 +70,32 @@ def preprocess_uploaded_image(image_bytes: bytes) -> list:
 # Patch-based PCA — works on ANY image size
 # ─────────────────────────────────────────────
 
-def _extract_patches(gray_array: np.ndarray, patch_size: int) -> tuple:
+def _extract_patches(color_array: np.ndarray, patch_size: int) -> tuple:
     """
-    Splits a 2D grayscale image into non-overlapping patches.
-    Returns: (patches [N, P*P], padded_h, padded_w)
+    Splits a 3D RGB image into non-overlapping patches.
+    Returns: (patches [N, P*P*3], padded_h, padded_w)
     """
-    h, w = gray_array.shape
+    h, w, c = color_array.shape
     p = patch_size
 
     # Pad so dimensions are divisible by patch_size
     pad_h = (p - (h % p)) % p
     pad_w = (p - (w % p)) % p
-    padded = np.pad(gray_array, ((0, pad_h), (0, pad_w)), mode='reflect')
-    ph, pw = padded.shape
+    padded = np.pad(color_array, ((0, pad_h), (0, pad_w), (0, 0)), mode='reflect')
+    ph, pw, _ = padded.shape
 
     n_rows, n_cols = ph // p, pw // p
-    patches = padded.reshape(n_rows, p, n_cols, p).swapaxes(1, 2).reshape(-1, p * p)
+    patches = padded.reshape(n_rows, p, n_cols, p, c).swapaxes(1, 2).reshape(-1, p * p * c)
     return patches, ph, pw, h, w
 
 
 def _reconstruct_from_patches(patches: np.ndarray, padded_h: int, padded_w: int,
                                orig_h: int, orig_w: int, patch_size: int) -> np.ndarray:
-    """Re-assembles patches back into a 2D image."""
+    """Re-assembles patches back into a 3D image."""
     p = patch_size
+    c = 3
     n_rows, n_cols = padded_h // p, padded_w // p
-    grid = patches.reshape(n_rows, n_cols, p, p).swapaxes(1, 2).reshape(padded_h, padded_w)
+    grid = patches.reshape(n_rows, n_cols, p, p, c).swapaxes(1, 2).reshape(padded_h, padded_w, c)
     return grid[:orig_h, :orig_w]
 
 
@@ -109,26 +111,37 @@ def patch_pca_compress(image_bytes: bytes, n_components: int, patch_size: int = 
       5. Stitch patches back into full image.
       6. Return original + reconstructed as base64, plus metrics.
     """
-    # ── Load image ──
+    # ── Load and Resize image (prevent RAM freeze on HD/4K) ──
     pil_original = Image.open(io.BytesIO(image_bytes))
+    
+    # Downscale if the image is too huge to prevent out-of-memory or UI freeze
+    max_dim = 600
+    if pil_original.width > max_dim or pil_original.height > max_dim:
+        pil_original.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        
     orig_w_px, orig_h_px = pil_original.size  # PIL uses (w, h)
     
-    # Convert to grayscale float
-    gray = np.array(pil_original.convert('L'), dtype=float) / 255.0
-    h, w = gray.shape
+    # Convert to RGB float
+    color = np.array(pil_original.convert('RGB'), dtype=float) / 255.0
+    h, w, c = color.shape
 
     # ── Extract patches ──
-    patches, padded_h, padded_w, orig_h, orig_w = _extract_patches(gray, patch_size)
+    patches, padded_h, padded_w, orig_h, orig_w = _extract_patches(color, patch_size)
     n_patches, patch_dim = patches.shape  # patch_dim = patch_size²
 
     # Clamp n_components to valid range
     max_components = min(n_patches, patch_dim)
     n_components = min(n_components, max_components)
 
-    # ── Fit PCA on patches ──
-    pca = PCA(n_components=n_components)
-    compressed = pca.fit_transform(patches)      # [N, K]
-    reconstructed_patches = pca.inverse_transform(compressed)  # [N, P²]
+    # ── Fit PCA on a representative subset of patches ──
+    pca = PCA(n_components=n_components, svd_solver='randomized')
+    n_sample_fit = min(n_patches, 2500)
+    subset_idx = np.random.choice(n_patches, n_sample_fit, replace=False)
+    pca.fit(patches[subset_idx])
+    
+    # ── Transform all patches ──
+    compressed = pca.transform(patches)
+    reconstructed_patches = pca.inverse_transform(compressed)
     reconstructed_patches = np.clip(reconstructed_patches, 0.0, 1.0)
 
     # ── Stitch image back ──
@@ -136,9 +149,8 @@ def patch_pca_compress(image_bytes: bytes, n_components: int, patch_size: int = 
         reconstructed_patches, padded_h, padded_w, orig_h, orig_w, patch_size
     )
 
-    # ── Metrics ──
-    mse = calculate_mse(gray, reconstructed)
-
+    # Calculate true 8-bit pixel MSE (scaling by 255^2)
+    mse = float(np.mean((color - reconstructed) ** 2)) * (255.0 ** 2)
     # Original: N_patches × patch_dim floats
     # Compressed: N_patches × n_components floats + PCA model components
     original_size  = n_patches * patch_dim
@@ -149,8 +161,7 @@ def patch_pca_compress(image_bytes: bytes, n_components: int, patch_size: int = 
     variance_retained = float(np.sum(pca.explained_variance_ratio_)) * 100
 
     # ── Build output images ──
-    # Original: keep the real uploaded image — just convert to grayscale for fair comparison
-    orig_b64 = ndarray_to_base64(gray)
+    orig_b64 = ndarray_to_base64(color)
     recon_b64 = ndarray_to_base64(reconstructed)
 
     return {

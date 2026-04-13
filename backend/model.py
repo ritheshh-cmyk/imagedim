@@ -27,8 +27,8 @@ class PCAManager:
     @classmethod
     def get_model(cls, n_components: int) -> PCA:
         if n_components not in cls._cache:
-            data = MNISTManager.get_data()
-            pca = PCA(n_components=n_components, whiten=True)
+            data = MNISTManager.get_data(max_samples=2000)
+            pca = PCA(n_components=n_components, whiten=True, svd_solver='randomized')
             pca.fit(data)
             cls._cache[n_components] = pca
         return cls._cache[n_components]

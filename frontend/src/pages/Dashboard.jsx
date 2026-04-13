@@ -1,379 +1,591 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, RefreshCw, SlidersHorizontal, Image as ImageIcon, Loader2, Upload, X, ArrowRight } from 'lucide-react';
-import gsap from 'gsap';
-import { getSampleImage, processImage, uploadImage } from '../api';
-import ModelGraph from '../ModelGraph';
-import '../index.css';
+import {
+  Download, RefreshCw, SlidersHorizontal, Image as ImageIcon,
+  Loader2, Upload, X, ChevronRight, Info,
+} from 'lucide-react';
+import { getSampleImage, processImage, processHDImage } from '../api';
 
+/* ── Inline helpers ── */
+const Divider = () => <div style={{ borderTop: '1px solid #F3F4F6', margin: '16px 0' }} />;
+
+const SectionHeader = ({ icon, children }) => (
+  <div className="section-header">
+    {icon && <span style={{ color: '#9CA3AF' }}>{icon}</span>}
+    {children}
+  </div>
+);
+
+/* ── Quality bar ── */
+const QualityBar = ({ score }) => {
+  const color = score >= 70 ? '#059669' : score >= 40 ? '#D97706' : '#DC2626';
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <span style={{ fontSize: '0.6875rem', fontWeight: '700', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9CA3AF' }}>
+          Fidelity Score
+        </span>
+        <span style={{ fontSize: '0.875rem', fontWeight: '700', color, fontFamily: "'JetBrains Mono', monospace" }}>
+          {score.toFixed(0)}%
+        </span>
+      </div>
+      <div className="quality-bar-track">
+        <div className="quality-bar-fill" style={{ width: `${score}%`, background: color }} />
+      </div>
+    </div>
+  );
+};
+
+/* ── Stat chip ── */
+const StatChip = ({ label, value, sub }) => (
+  <div className="stat-chip">
+    <span className="stat-chip-label">{label}</span>
+    <span className="stat-chip-value">{value}</span>
+    {sub && <span style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '2px' }}>{sub}</span>}
+  </div>
+);
+
+/* ── Image placeholder ── */
+const ImagePlaceholder = ({ label }) => (
+  <div style={{
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    height: '240px', gap: '10px', color: '#D1D5DB',
+  }}>
+    <ImageIcon size={40} strokeWidth={1} />
+    <p style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#D1D5DB' }}>
+      {label}
+    </p>
+  </div>
+);
+
+/* ══════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════ */
 function Dashboard() {
-  const [components, setComponents] = useState(20);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [currentSample, setCurrentSample] = useState(null);
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
+  const [components, setComponents]         = useState(20);
+  const [patchSize, setPatchSize]           = useState(8);
+  const [isProcessing, setIsProcessing]     = useState(false);
+  const [isUploading, setIsUploading]       = useState(false);
+  const [currentSample, setCurrentSample]   = useState(null);
+  const [results, setResults]               = useState(null);
+  const [error, setError]                   = useState('');
+  const [isDragging, setIsDragging]         = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
+  const [isUploadedMode, setIsUploadedMode] = useState(false);
 
-  const containerRef = useRef(null);
-  const headerRef = useRef(null);
-  const cardsRef = useRef([]);
   const fileInputRef = useRef(null);
 
-  // GSAP entrance + mouse parallax
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.set([headerRef.current, ...cardsRef.current.filter(Boolean)], {
-        opacity: 0, y: 60, rotateX: -8,
-      });
-      gsap.to([headerRef.current, ...cardsRef.current.filter(Boolean)], {
-        opacity: 1, y: 0, rotateX: 0,
-        duration: 1.0, stagger: 0.12, ease: 'power3.out',
-        clearProps: 'transform'
-      });
-
-      const handleMouseMove = (e) => {
-        const x = (e.clientX / window.innerWidth - 0.5) * 30;
-        const y = (e.clientY / window.innerHeight - 0.5) * 30;
-        gsap.to('.wb-1', { x: x * -1.2, y: y * -1.2, duration: 1.2, ease: 'power2.out' });
-        gsap.to('.wb-2', { x: x * 1.0, y: y * 1.0, duration: 1.4, ease: 'power2.out' });
-        gsap.to('.wb-3', { x: x * -0.6, y: y * 0.8, duration: 1.0, ease: 'power2.out' });
-      };
-
-      window.addEventListener('mousemove', handleMouseMove);
-      return () => window.removeEventListener('mousemove', handleMouseMove);
-    }, containerRef);
-
-    return () => ctx.revert();
-  }, []);
-
+  /* ── Initial load ── */
   useEffect(() => { handleLoadSample(); }, []);
+
+  /* ── Run compression ── */
+  const runProcess = useCallback(async (n_components, sampleData, isUpload, patch_size = patchSize) => {
+    if (!sampleData) return;
+    try {
+      setIsProcessing(true); setError('');
+      let data;
+      if (isUpload || sampleData instanceof File) {
+        data = await processHDImage(sampleData, n_components, patch_size);
+      } else {
+        data = await processImage(n_components, sampleData);
+      }
+      setResults(data);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Processing failed. Is the backend running?');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [patchSize]);
+
+  /* ── Slider debounce ── */
+  useEffect(() => {
+    const delay = isUploadedMode ? 700 : 280;
+    const t = setTimeout(() => {
+      if (currentSample) runProcess(components, currentSample, isUploadedMode);
+    }, delay);
+    return () => clearTimeout(t);
+  }, [components, patchSize]);
 
   const handleLoadSample = async () => {
     try {
-      setIsProcessing(true); setError(''); setUploadedFileName('');
-      const sample_array = await getSampleImage();
-      setCurrentSample(sample_array);
-      await runProcess(components, sample_array);
+      setIsProcessing(true); setError(''); setUploadedFileName(''); setIsUploadedMode(false);
+      const sample = await getSampleImage();
+      setCurrentSample(sample);
+      await runProcess(components, sample, false);
     } catch {
-      setError('Failed to connect to backend. Is the server running?');
+      setError('Cannot reach backend. Run: uvicorn backend.main:app --reload');
     } finally { setIsProcessing(false); }
   };
-
-  const runProcess = async (n_components, imageArray) => {
-    if (!imageArray) return;
-    try {
-      setIsProcessing(true); setError('');
-      const data = await processImage(n_components, imageArray);
-      setResults(data);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Processing failed.');
-    } finally { setIsProcessing(false); }
-  };
-
-  useEffect(() => {
-    const t = setTimeout(() => { if (currentSample) runProcess(components, currentSample); }, 500);
-    return () => clearTimeout(t);
-  }, [components]);
 
   const handleFileUpload = useCallback(async (file) => {
-    if (!file?.type.startsWith('image/')) {
-      setError('Please upload a valid image file.'); return;
-    }
+    if (!file?.type.startsWith('image/')) { setError('Please upload a valid image file.'); return; }
     try {
+      setComponents(8);
       setIsUploading(true); setError(''); setUploadedFileName(file.name);
-      const imgArr = await uploadImage(file);
-      setCurrentSample(imgArr);
-      await runProcess(components, imgArr);
+      setIsUploadedMode(true); setCurrentSample(file);
+      await runProcess(8, file, true, patchSize);
     } catch (err) {
       setError(err.response?.data?.detail || 'Upload failed.');
       setUploadedFileName('');
     } finally { setIsUploading(false); }
-  }, [components]);
+  }, [patchSize]);
 
-  const onFileInputChange = (e) => {
-    const f = e.target.files?.[0];
-    if (f) handleFileUpload(f);
-    e.target.value = '';
-  };
-
-  const onDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
-  const onDragLeave = () => setIsDragging(false);
-  const onDrop = (e) => {
-    e.preventDefault(); setIsDragging(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) handleFileUpload(f);
-  };
+  const onFileChange  = (e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; };
+  const onDragOver    = (e) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave   = () => setIsDragging(false);
+  const onDrop        = (e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleFileUpload(f); };
 
   const handleDownload = () => {
     if (!results) return;
-    const a = document.createElement('a');
-    a.href = results.reconstructed_image_b64;
-    a.download = `pca_${components}d.png`;
-    a.click();
+    const a = document.createElement('a'); a.href = results.reconstructed_image_b64;
+    a.download = `pca_compressed_${components}k.png`; a.click();
   };
 
-  const addCardRef = (el) => {
-    if (el && !cardsRef.current.includes(el)) cardsRef.current.push(el);
-  };
-
-  // 3D Tilt on hover — lighter angles for white cards
-  const tiltCard = (e, target) => {
-    const rect = target.getBoundingClientRect();
-    const rx = ((e.clientY - rect.top - rect.height / 2) / (rect.height / 2)) * -4;
-    const ry = ((e.clientX - rect.left - rect.width / 2) / (rect.width / 2)) * 4;
-    gsap.to(target, { rotateX: rx, rotateY: ry, translateZ: 20, scale: 1.015, duration: 0.4, ease: 'power2.out', overwrite: 'auto' });
-  };
-
-  const resetTilt = (target) => {
-    gsap.to(target, { rotateX: 0, rotateY: 0, translateZ: 0, scale: 1, duration: 0.6, ease: 'power3.out', overwrite: 'auto' });
-  };
+  /* ── Derived metrics ── */
+  const qualityScore = results
+    ? (results.variance_retained_pct != null
+        ? results.variance_retained_pct
+        : Math.max(0, 100 - (results.mse ?? 0) * 800))
+    : 0;
 
   const busy = isProcessing || isUploading;
+  const isHDMode = isUploadedMode && results?.original_resolution;
 
   return (
-    <div ref={containerRef} className="relative min-h-screen" style={{ perspective: '1400px' }}>
-      {/* RitheshVerse Watercolor Background */}
-      <div className="watercolor-bg">
-        <div className="watercolor-blob wb-1"></div>
-        <div className="watercolor-blob wb-2"></div>
-        <div className="watercolor-blob wb-3"></div>
-      </div>
-      <div className="texture-overlay"></div>
+    <div style={{ minHeight: '100vh', background: '#F9FAFB', paddingTop: '80px' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px 80px' }}>
 
-      <div className="max-w-6xl mx-auto px-6 py-10 md:px-10 md:py-14 relative z-10">
-
-        {/* HEADER — RitheshVerse Varien font */}
-        <header ref={headerRef} className="mb-14 text-center">
-          <div className="varien text-5xl md:text-7xl font-black mb-3 tracking-tight text-[#0A0A0A] leading-none">
-            PCA<br/>
-            <span style={{ color: '#7C3AED' }}>Compression</span>
-          </div>
-          <p className="text-[#6B7280] max-w-xl mx-auto text-base md:text-lg mt-4 leading-relaxed">
-            Upload any image or sample an MNIST digit. Watch PCA decompose 784 dimensions into its essential eigenspace.
+        {/* ── Page Header ── */}
+        <header style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#111827', letterSpacing: '-0.03em', marginBottom: '6px' }}>
+            PCA Compression Dashboard
+          </h1>
+          <p style={{ fontSize: '0.875rem', color: '#9CA3AF' }}>
+            Upload any image · Adjust components · Watch quality trade-offs in real time
           </p>
         </header>
 
+        {/* ── Error Banner ── */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-8 flex items-center gap-3 text-sm">
-            <X size={16} className="shrink-0" /> {error}
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626',
+            padding: '12px 16px', borderRadius: '10px', marginBottom: '24px',
+            display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8125rem',
+          }}>
+            <X size={15} style={{ flexShrink: 0 }} /> {error}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* ══ MAIN 3-COLUMN GRID ══ */}
+        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
 
-          {/* === CONTROLS === */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div
-              ref={addCardRef}
-              className="glass-panel p-7"
-              onMouseMove={(e) => tiltCard(e, e.currentTarget)}
-              onMouseLeave={(e) => resetTilt(e.currentTarget)}
-            >
-              {/* Section label */}
-              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-black/[0.07]">
-                <SlidersHorizontal size={18} className="text-[#7C3AED]" />
-                <span className="font-semibold text-sm uppercase tracking-widest text-[#0A0A0A]">Controls</span>
+          {/* ── Column 1: Controls ── */}
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '0' }}>
+            <SectionHeader icon={<SlidersHorizontal size={14} />}>Controls</SectionHeader>
+
+            {/* Components slider */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280' }}>
+                  Components (k)
+                </label>
+                <span style={{
+                  background: '#111827', color: '#FFFFFF', borderRadius: '6px',
+                  padding: '2px 10px', fontSize: '0.8125rem', fontWeight: '700',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>{components}</span>
               </div>
-
-              {/* Slider */}
-              <div className="space-y-4 mb-7">
-                <div className="flex justify-between items-center">
-                  <label htmlFor="components" className="text-xs font-semibold uppercase tracking-widest text-[#6B7280]">
-                    Components
-                  </label>
-                  <span className="text-sm font-bold text-[#0A0A0A] bg-black/[0.06] px-3 py-0.5 rounded-full">
-                    {components}
-                  </span>
-                </div>
-                <input
-                  id="components"
-                  type="range" min="1" max="100" value={components}
-                  onChange={(e) => setComponents(parseInt(e.target.value))}
-                  disabled={busy}
-                />
-                <div className="flex justify-between text-[10px] font-semibold uppercase tracking-widest text-[#9CA3AF]">
-                  <span>1 (max compression)</span>
-                  <span>100 (high fidelity)</span>
-                </div>
+              <input
+                type="range" min="1" max={isUploadedMode ? 200 : 150}
+                value={components} onChange={(e) => setComponents(+e.target.value)}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.625rem', color: '#D1D5DB', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>
+                <span>1 — max compress</span>
+                <span>{isUploadedMode ? '200' : '150'} — max fidelity</span>
               </div>
-
-              {/* Random Sample Button */}
-              <button
-                onClick={handleLoadSample}
-                disabled={busy}
-                className="btn-ghost w-full py-3 px-4 flex items-center justify-center gap-2 text-sm font-semibold mb-4 disabled:opacity-40"
-              >
-                {isProcessing && !isUploading
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <RefreshCw size={16} />
-                }
-                Load Random Digit
-              </button>
-
-              {/* Upload Zone */}
-              <div
-                onClick={() => !busy && fileInputRef.current?.click()}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-                className={`upload-zone p-6 text-center ${isDragging ? 'dragging' : ''} ${busy ? 'opacity-50 pointer-events-none' : ''}`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file" accept="image/*" className="hidden"
-                  onChange={onFileInputChange}
-                />
-                <div className="flex flex-col items-center gap-2">
-                  {isUploading
-                    ? <Loader2 size={28} className="animate-spin text-[#7C3AED]" />
-                    : <Upload size={28} className={isDragging ? 'text-[#0A0A0A]' : 'text-[#9CA3AF]'} />
-                  }
-                  <p className="font-semibold text-sm text-[#0A0A0A]">
-                    {isUploading ? 'Preprocessing...' : isDragging ? 'Drop to upload' : 'Upload Image'}
-                  </p>
-                  <p className="text-xs text-[#9CA3AF]">
-                    {isUploading ? 'Mapping to 28×28 grayscale' : 'Drag & drop or click to browse'}
-                  </p>
-                  {uploadedFileName && !isUploading && (
-                    <span className="text-xs font-mono bg-[#7C3AED]/10 text-[#7C3AED] px-3 py-1 rounded-full truncate max-w-full mt-1">
-                      {uploadedFileName}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '8px', lineHeight: '1.5' }}>
+                Fewer components = smaller file, lower quality. More = larger file, sharper output.
+              </p>
             </div>
 
-            {/* TELEMETRY */}
-            {results && (
-              <div
-                ref={addCardRef}
-                className="glass-panel p-7"
-                onMouseMove={(e) => tiltCard(e, e.currentTarget)}
-                onMouseLeave={(e) => resetTilt(e.currentTarget)}
-              >
-                <div className="flex items-center gap-2 mb-5 pb-4 border-b border-black/[0.07]">
-                  <span className="font-semibold text-sm uppercase tracking-widest text-[#0A0A0A]">Telemetry</span>
-                </div>
+            <Divider />
 
-                <div className="space-y-3">
-                  <div className="metric-row">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Input Dims</span>
-                    <span className="font-mono font-bold text-[#0A0A0A] text-sm">784</span>
+            {/* Patch size — only for HD uploads */}
+            {isUploadedMode && (
+              <>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#6B7280', display: 'block', marginBottom: '8px' }}>
+                    Patch Size
+                  </label>
+                  <div className="patch-radio-group">
+                    {[4, 8, 16].map(sz => (
+                      <button
+                        key={sz}
+                        onClick={() => { setPatchSize(sz); if (currentSample) runProcess(components, currentSample, true, sz); }}
+                        className={`patch-radio-btn${patchSize === sz ? ' selected' : ''}`}
+                        disabled={busy}
+                      >
+                        {sz}px
+                      </button>
+                    ))}
                   </div>
-                  <div className="metric-row">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">PCA Dims</span>
-                    <span className="font-mono font-bold text-[#0A0A0A] text-sm">{results.n_components}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Compression</span>
-                    <span className="font-mono font-black text-[#7C3AED]">{results.compression_ratio.toFixed(2)}×</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">MSE Loss</span>
-                    <span className="font-mono font-black text-red-500">{results.mse.toFixed(4)}</span>
-                  </div>
+                  <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', marginTop: '6px', lineHeight: '1.5' }}>
+                    Patch size controls vector dimensionality: 4px=48D, 8px=192D, 16px=768D
+                  </p>
                 </div>
-              </div>
+                <Divider />
+              </>
             )}
+
+            {/* Buttons */}
+            <button
+              onClick={handleLoadSample} disabled={busy}
+              className="btn-ghost btn-sm"
+              style={{ width: '100%', justifyContent: 'center', marginBottom: '10px' }}
+            >
+              {isProcessing && !isUploading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Load Random MNIST Digit
+            </button>
+
+            {/* Upload zone */}
+            <div
+              onClick={() => !busy && fileInputRef.current?.click()}
+              onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
+              className={`upload-zone${isDragging ? ' dragging' : ''}${busy ? ' opacity-50 pointer-events-none' : ''}`}
+            >
+              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                {isUploading
+                  ? <Loader2 size={24} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+                  : <Upload size={24} style={{ color: isDragging ? '#111827' : '#9CA3AF' }} />
+                }
+                <p style={{ fontSize: '0.8125rem', fontWeight: '600', color: '#374151' }}>
+                  {isUploading ? 'Processing…' : isDragging ? 'Drop image here' : 'Upload Image'}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
+                  {isUploading ? 'Extracting RGB patches' : 'Drag & drop · JPEG, PNG, WebP'}
+                </p>
+                {uploadedFileName && !isUploading && (
+                  <span style={{
+                    fontSize: '0.6875rem', fontFamily: 'JetBrains Mono, monospace',
+                    background: '#F3F4F6', color: '#374151', padding: '2px 10px',
+                    borderRadius: '9999px', maxWidth: '100%', overflow: 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{uploadedFileName}</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* === VISUALIZATION PANEL === */}
-          <div
-            ref={addCardRef}
-            className="lg:col-span-8 glass-panel p-8 flex flex-col items-center justify-center min-h-[480px] relative"
-            onMouseMove={(e) => tiltCard(e, e.currentTarget)}
-            onMouseLeave={(e) => resetTilt(e.currentTarget)}
-          >
-            {/* Loading overlay */}
-            {busy && (
-              <div className="absolute inset-0 rounded-[20px] bg-white/70 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
-                <Loader2 size={40} className="animate-spin text-[#7C3AED]" />
-                <p className="text-xs font-semibold tracking-widest uppercase text-[#7C3AED]">
-                  {isUploading ? 'Mapping Image to PCA Space…' : 'Decomposing Eigenspace…'}
-                </p>
-              </div>
+          {/* ── Column 2: Original Input Image ── */}
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
+            <SectionHeader icon={<ImageIcon size={14} />}>Original Input</SectionHeader>
+
+            {/* Loading skeleton */}
+            {busy && !results && (
+              <div className="skeleton" style={{ flex: 1, minHeight: '280px', borderRadius: '10px' }} />
             )}
 
-            {!results && !busy ? (
-              <div className="flex flex-col items-center gap-4 text-[#9CA3AF]">
-                <ImageIcon size={52} strokeWidth={1} />
-                <p className="text-sm font-semibold uppercase tracking-widest">Awaiting tensor input…</p>
-              </div>
-            ) : results ? (
-              <div className="w-full space-y-8">
-
-                {/* Side by side images */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                  {/* Original Image Box */}
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="text-xs font-bold uppercase tracking-widest text-[#6B7280]">Input Image</div>
-                    <div className="image-frame w-full max-w-[280px] aspect-square flex items-center justify-center p-4">
-                      <img
-                        src={results.original_image_b64}
-                        alt="Original input"
-                        className="w-full h-full object-contain transition-transform duration-500 hover:scale-105"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
+            {/* Image */}
+            {results ? (
+              <>
+                <div className="image-frame" style={{ flex: 1, minHeight: '280px', marginBottom: '16px', position: 'relative' }}>
+                  {busy && (
+                    <div style={{
+                      position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '11px', zIndex: 5,
+                    }}>
+                      <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
                     </div>
-                    <div className="text-xs text-[#9CA3AF] font-mono">784 dimensions</div>
-                  </div>
-
-                  {/* Arrow indicator (hidden on mobile) */}
-                  <div className="hidden md:absolute md:flex md:items-center md:justify-center" style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}>
-                    <ArrowRight size={24} className="text-[#7C3AED]" />
-                  </div>
-
-                  {/* Reconstructed Output */}
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="text-xs font-bold uppercase tracking-widest text-[#7C3AED]">
-                      After PCA ({results.n_components}D)
-                    </div>
-                    <div className="image-frame image-frame-accent w-full max-w-[280px] aspect-square flex items-center justify-center p-4">
-                      <img
-                        src={results.reconstructed_image_b64}
-                        alt="Reconstructed after PCA"
-                        className="w-full h-full object-contain transition-transform duration-500 hover:scale-105"
-                        style={{ imageRendering: 'pixelated' }}
-                      />
-                    </div>
-                    <div className="text-xs text-[#9CA3AF] font-mono">{results.n_components} dimensions</div>
-                  </div>
+                  )}
+                  <img
+                    src={results.original_image_b64}
+                    alt="Original input"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto', maxHeight: '320px' }}
+                  />
                 </div>
 
-                {/* Bottom bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-black/[0.07]">
-                  <p className="text-xs text-[#9CA3AF] leading-relaxed max-w-xs">
-                    PCA projects 784px into {results.n_components} principal components
-                    ({results.compression_ratio.toFixed(1)}× smaller), then reconstructs back.
-                    Blurriness reflects information loss.
-                  </p>
-                  <button
-                    onClick={handleDownload}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    <Download size={15} />
-                    Export Output
-                  </button>
+                {/* Metadata */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {isHDMode ? (
+                    <>
+                      <MetaRow label="Filename" value={uploadedFileName} mono />
+                      <MetaRow label="Resolution" value={results.original_resolution} mono />
+                      <MetaRow label="Color Mode" value="RGB · 3 channels" mono />
+                      <MetaRow label="Patch Dim" value={`${patchSize}×${patchSize}×3 = ${patchSize * patchSize * 3}D`} mono />
+                    </>
+                  ) : (
+                    <>
+                      <MetaRow label="Source" value="MNIST Handwritten Digit" />
+                      <MetaRow label="Dimensions" value="28×28 = 784D (grayscale)" mono />
+                      <MetaRow label="Mode" value="Flat vector · PCA direct" />
+                    </>
+                  )}
                 </div>
-              </div>
+              </>
+            ) : !busy ? (
+              <ImagePlaceholder label="Awaiting input…" />
+            ) : null}
+          </div>
+
+          {/* ── Column 3: Compressed PCA Output ── */}
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
+            <SectionHeader>
+              <span style={{ color: '#9CA3AF', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <ChevronRight size={14} strokeWidth={3} />
+              </span>
+              PCA Compressed Output
+            </SectionHeader>
+
+            {busy && !results && (
+              <div className="skeleton" style={{ flex: 1, minHeight: '280px', borderRadius: '10px' }} />
+            )}
+
+            {results ? (
+              <>
+                <div className="image-frame image-frame-output" style={{ flex: 1, minHeight: '280px', marginBottom: '16px', position: 'relative' }}>
+                  {busy && (
+                    <div style={{
+                      position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '11px', zIndex: 5,
+                    }}>
+                      <Loader2 size={28} style={{ color: '#374151', animation: 'spin 1s linear infinite' }} />
+                    </div>
+                  )}
+                  <img
+                    src={results.reconstructed_image_b64}
+                    alt="PCA compressed output"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto', maxHeight: '320px' }}
+                  />
+                </div>
+
+                {/* Output metadata */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                  <MetaRow label="Components Used" value={`k = ${results.n_components}`} mono />
+                  <MetaRow
+                    label="Compression Ratio"
+                    value={`${results.compression_ratio.toFixed(2)}×`}
+                    mono
+                    highlight
+                  />
+                  {isHDMode && results.n_patches != null && (
+                    <MetaRow label="Patches Processed" value={results.n_patches.toLocaleString()} mono />
+                  )}
+                </div>
+
+                {/* Quality bar */}
+                <QualityBar score={Math.min(100, Math.max(0, qualityScore))} />
+
+                {/* Download */}
+                <button onClick={handleDownload} className="btn-ghost btn-sm" style={{ marginTop: '12px', width: '100%', justifyContent: 'center' }}>
+                  <Download size={13} /> Download Compressed Image
+                </button>
+              </>
+            ) : !busy ? (
+              <ImagePlaceholder label="Output appears here…" />
             ) : null}
           </div>
         </div>
 
-        {/* Isometric Model Graph */}
-        <ModelGraph components={components} isActive={!!results} />
+        {/* ══ METRICS ROW ══ */}
+        {results && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+            <StatChip
+              label="MSE Loss"
+              value={results.mse.toFixed(results.mse < 1 ? 4 : 2)}
+              sub="Mean Squared Error · lower is better"
+            />
+            <StatChip
+              label="Compression"
+              value={`${results.compression_ratio.toFixed(2)}×`}
+              sub="Original data / compressed data"
+            />
+            {results.variance_retained_pct != null && (
+              <StatChip
+                label="Variance Retained"
+                value={`${results.variance_retained_pct.toFixed(1)}%`}
+                sub="Information preserved by top-k eigenvectors"
+              />
+            )}
+            <StatChip
+              label="Components (k)"
+              value={results.n_components}
+              sub="Principal eigenvectors kept"
+            />
+            {results.n_patches != null && (
+              <StatChip
+                label="Patches"
+                value={results.n_patches.toLocaleString()}
+                sub={`${patchSize}×${patchSize}=` + patchSize * patchSize + `D per patch per channel`}
+              />
+            )}
+          </div>
+        )}
 
-        {/* Footer brand line — RitheshVerse style */}
-        <footer className="mt-14 text-center">
-          <p className="text-xs text-[#9CA3AF] tracking-widest uppercase">
-            PCA Compression Matrix · Built with the RitheshVerse design system
-          </p>
-        </footer>
+        {/* ══ EXPLANATION STRIP ══ */}
+        {results && (
+          <div className="card" style={{ padding: '20px 24px', marginBottom: '24px', background: '#FAFAFA' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <Info size={15} style={{ color: '#9CA3AF', flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontSize: '0.8125rem', color: '#6B7280', lineHeight: '1.7', margin: 0 }}>
+                <strong style={{ color: '#374151' }}>What you're seeing:</strong> The image on the right is the PCA-compressed version
+                of the original. Using <strong style={{ color: '#374151' }}>k = {results.n_components}</strong> principal components,
+                PCA projects each {isHDMode ? `${patchSize * patchSize * 3}` : '784'}-dimensional
+                {isHDMode ? ' patch' : ' pixel vector'} into {results.n_components} dimensions,
+                then maps it back to the original space — keeping only the structure captured
+                by the top eigenvectors.
+                {results.variance_retained_pct != null &&
+                  ` This retains ${results.variance_retained_pct.toFixed(1)}% of the total image variance.`}
+                {' '}Higher k = sharper output. Lower k = smaller file, more blurring.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ══ PIPELINE FLOW GRAPH ══ */}
+        {results && (
+          <div className="card" style={{ padding: '24px 28px' }}>
+            <SectionHeader>Model Pipeline — What Happened Step by Step</SectionHeader>
+            <PipelineFlow results={results} isHD={isHDMode} patchSize={patchSize} />
+          </div>
+        )}
+
       </div>
     </div>
   );
 }
+
+/* ── Metadata row ── */
+const MetaRow = ({ label, value, mono, highlight }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#FAFAFA', borderRadius: '7px', border: '1px solid #F3F4F6' }}>
+    <span style={{ fontSize: '0.6875rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>
+      {label}
+    </span>
+    <span style={{
+      fontSize: '0.75rem', fontWeight: highlight ? '700' : '600',
+      fontFamily: mono ? "'JetBrains Mono', monospace" : 'inherit',
+      color: highlight ? '#111827' : '#374151',
+    }}>
+      {value}
+    </span>
+  </div>
+);
+
+/* ── Horizontal Pipeline Flow ── */
+const PipelineFlow = ({ results, isHD, patchSize }) => {
+  const dim = patchSize * patchSize * 3;
+
+  const steps = isHD ? [
+    {
+      n: '01',
+      title: 'Input Image',
+      detail: results.original_resolution || '—',
+      sub: 'Loaded as RGB numpy array',
+    },
+    {
+      n: '02',
+      title: 'Patch Extraction',
+      detail: `${results.n_patches?.toLocaleString() ?? '—'} patches`,
+      sub: `${patchSize}×${patchSize}×3 = ${dim}D per patch`,
+    },
+    {
+      n: '03',
+      title: 'PCA Fit',
+      detail: `Randomised SVD`,
+      sub: 'Fitted on ≤2,500 patch subset',
+    },
+    {
+      n: '04',
+      title: 'Compress',
+      detail: `${dim}D → ${results.n_components}D`,
+      sub: `${results.compression_ratio.toFixed(1)}× data reduction`,
+    },
+    {
+      n: '05',
+      title: 'PCA Output',
+      detail: `${results.variance_retained_pct?.toFixed(1) ?? '—'}% variance kept`,
+      sub: `MSE = ${results.mse.toFixed(2)}`,
+    },
+  ] : [
+    {
+      n: '01',
+      title: 'MNIST Digit',
+      detail: '28×28 = 784D',
+      sub: 'Grayscale normalised [0,1]',
+    },
+    {
+      n: '02',
+      title: 'PCA Fit',
+      detail: 'Trained on 2,000 samples',
+      sub: 'Whiten + Randomised SVD',
+    },
+    {
+      n: '03',
+      title: 'Compress',
+      detail: `784D → ${results.n_components}D`,
+      sub: `${results.compression_ratio.toFixed(1)}× reduction`,
+    },
+    {
+      n: '04',
+      title: 'PCA Output',
+      detail: `784D restored`,
+      sub: `MSE = ${results.mse.toFixed(4)}`,
+    },
+  ];
+
+  return (
+    <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: '0', minWidth: `${steps.length * 160}px` }}>
+        {steps.map((step, i) => (
+          <React.Fragment key={i}>
+            <div style={{
+              flex: 1,
+              background: i === steps.length - 1 ? '#111827' : '#FAFAFA',
+              border: `1px solid ${i === steps.length - 1 ? '#111827' : '#E5E7EB'}`,
+              borderRadius: '10px',
+              padding: '14px 16px',
+              display: 'flex', flexDirection: 'column', gap: '4px',
+              position: 'relative',
+            }}>
+              <span style={{
+                position: 'absolute', top: '-9px', left: '12px',
+                background: i === steps.length - 1 ? '#FFFFFF' : '#111827',
+                color: i === steps.length - 1 ? '#111827' : '#FFFFFF',
+                borderRadius: '9999px', width: '18px', height: '18px',
+                fontSize: '9px', fontWeight: '700', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                fontFamily: "'JetBrains Mono', monospace",
+                border: '1.5px solid ' + (i === steps.length - 1 ? '#D1D5DB' : '#111827'),
+              }}>{step.n}</span>
+              <span style={{
+                fontSize: '0.6875rem', fontWeight: '700', textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                color: i === steps.length - 1 ? '#FFFFFF' : '#111827',
+              }}>{step.title}</span>
+              <span style={{
+                fontSize: '0.75rem', fontWeight: '600',
+                fontFamily: "'JetBrains Mono', monospace",
+                color: i === steps.length - 1 ? '#E5E7EB' : '#374151',
+              }}>{step.detail}</span>
+              <span style={{
+                fontSize: '0.65rem',
+                fontFamily: "'JetBrains Mono', monospace",
+                color: i === steps.length - 1 ? '#6B7280' : '#9CA3AF',
+                lineHeight: '1.4',
+              }}>{step.sub}</span>
+            </div>
+            {i < steps.length - 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px', flexShrink: 0 }}>
+                <ChevronRight size={16} color="#D1D5DB" strokeWidth={2.5} />
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default Dashboard;

@@ -9,33 +9,13 @@ const ModelGraph = ({ components = 20, isActive = false }) => {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // Set initial 3D positions for the planes
-      gsap.set(planesRef.current, {
-        opacity: 0,
-        z: -100,
-        rotateX: 45,
-        rotateZ: -20,
-      });
-
-      // Animate entry
-      gsap.to(planesRef.current, {
-        opacity: 1,
-        z: 0,
-        rotateX: 55,
-        rotateZ: -30,
-        duration: 1.5,
-        stagger: 0.2,
-        ease: 'power3.out',
-      });
-
-      // Hover bobbing effect for lines if they exist
+      gsap.fromTo(containerRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 1, ease: 'power3.out' });
       if (linesRef.current) {
         gsap.to(linesRef.current, {
           opacity: isActive ? 1 : 0.2,
           duration: 1,
         });
       }
-      
     }, containerRef);
     return () => ctx.revert();
   }, [isActive]);
@@ -109,8 +89,7 @@ const ModelGraph = ({ components = 20, isActive = false }) => {
             {bottleneckNodes.map((_, i) => (
               <div 
                 key={`bot-${i}`} 
-                className={`w-3 h-3 md:w-4 md:h-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 shadow-[0_0_10px_rgba(124,58,237,0.5)] ${isActive ? 'animate-pulse' : 'opacity-60'}`}
-                style={{ animationDelay: `${i * 0.1}s` }}
+                className={`w-3 h-3 md:w-4 md:h-4 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 shadow-[0_0_10px_rgba(124,58,237,0.5)] ${isActive ? 'opacity-100' : 'opacity-40'}`}
               />
             ))}
           </div>

@@ -34,4 +34,16 @@ export const uploadImage = async (file) => {
   return response.data.image;
 };
 
+// Process HD images at native resolution with configurable patch size
+export const processHDImage = async (file, n_components, patch_size = 8) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axios.post(
+    `http://127.0.0.1:8000/process_image?n_components=${n_components}&patch_size=${patch_size}`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+};
+
 export default api;

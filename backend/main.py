@@ -34,12 +34,6 @@ class ReconstructRequest(BaseModel):
     n_components: int = Field(ge=1, le=784)
     compressed_vector: List[float]
 
-@app.on_event("startup")
-def preload():
-    # Warm up dataset loading in background thread (optional but good practice)
-    print("Initializing MNIST Dataset...")
-    MNISTManager.get_data()
-    print("Ready!")
 
 @app.get("/api/sample")
 def get_sample_image():
@@ -63,8 +57,8 @@ async def upload_preprocess(file: UploadFile = File(...)):
 @app.post("/process_image")
 async def process_image_file(
     file: UploadFile = File(...),
-    n_components: int = 16,
-    patch_size: int = 8,
+    n_components: int = 10,
+    patch_size: int = 16,
 ):
     """
     Patch-based PCA on ANY uploaded image at its NATIVE resolution.
@@ -74,9 +68,10 @@ async def process_image_file(
     """
     try:
         contents = await file.read()
-        # Clamp n_components to a sensible upper bound for patch_size
-        max_k = patch_size * patch_size
-        n_components = max(1, min(n_components, max_k - 1))
+        # Clamp n_components to proper channels and restrict to show visible compression
+        max_k = patch_size * patch_size * 3
+        max_allowed = min(150, max_k - 1)
+        n_components = max(1, min(n_components, max_allowed))
         result = patch_pca_compress(contents, n_components=n_components, patch_size=patch_size)
         return result
     except Exception as e:
