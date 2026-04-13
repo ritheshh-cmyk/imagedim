@@ -1,185 +1,153 @@
-# PCA Matrix — Image Compression via Dimensionality Reduction
+# PCA Matrix
 
-> **Compress any image mathematically.** No neural networks, no GPU, no training data.  
-> Pure linear algebra: Principal Component Analysis (PCA) reduces high-dimensional image patches to their most essential components.
+**Principal Component Analysis — Image Compression Toolkit**
 
----
-
-## What This Does
-
-Upload any JPEG, PNG, or WebP image. The app splits it into small patches, runs PCA on each patch set, and reconstructs an approximate image using only `k` principal components instead of the full pixel representation. You control `k` — fewer components means a smaller file and blurrier output; more components retain sharper detail.
-
-**Key capabilities:**
-- Native RGB compression (no downscaling to 28×28)  
-- Patch-based architecture — scales to 4K images  
-- Configurable patch size: 4×4 (48D), 8×8 (192D), 16×16 (768D)  
-- Real-time quality metrics: MSE, compression ratio, variance retained  
-- MNIST digit mode for quick dimensionality reduction demos  
+A full-stack web application that compresses images using PCA (Principal Component Analysis), visualises dimensionality reduction in real-time, and provides interactive accuracy curves and mathematical theory — all in a clean, glassmorphic dashboard.
 
 ---
 
-## How PCA Compression Works
+## ✨ Features
 
-```
-Input Image (H × W × 3)
-        │
-        ▼
-Patch Extraction  —  split into non-overlapping N×N×3 patches
-        │                each patch = N²×3 dimensional vector
-        ▼
-PCA Fit  —  Randomised SVD on a 2,500-patch random subset
-        │   finds eigenvectors (directions of maximum variance)
-        ▼
-Compress  —  project all patches onto top-k eigenvectors
-        │    192D patch  →  k-dimensional latent code
-        ▼
-Reconstruct  —  inverse_transform: k-dim  →  192D approximation
-        │
-        ▼
-Stitch Output  —  reassemble patches → full image (H × W × 3)
-```
+| Page | Description |
+|---|---|
+| **Overview** `/` | Landing page — what PCA is and how the app works |
+| **Dashboard** `/dashboard` | Upload any image or try MNIST demo, adjust components, compare input vs output |
+| **Analytics** `/analytics` | Live accuracy curves: MSE, variance retained, compression ratio, quality score |
+| **Theory** `/theory` | Step-by-step PCA math — centering, covariance, eigenvectors, reconstruction |
 
-**Mathematical core:**
-
-| Symbol | Meaning |
-|--------|---------|
-| **X** | Data matrix of shape (N_patches, patch_dim) |
-| **W** | PCA weight matrix (top-k eigenvectors), shape (patch_dim, k) |
-| **z** | Compressed code: `z = (X − μ) · W`, shape (N_patches, k) |
-| **X̂** | Reconstructed: `X̂ = z · Wᵀ + μ` |
-| **MSE** | `mean((X − X̂)²) × 255²` — pixel-level error |
-| **Variance %** | `Σ(selected eigenvalues) / Σ(all eigenvalues) × 100` |
+- 🖼️ Upload any JPEG/PNG/WebP image → compress with PCA → compare side-by-side
+- 📊 Interactive SVG charts (no dependencies) — hover for values
+- ⚡ Pre-trained model loaded from disk at startup — zero wait on first request
+- 🔢 Real metrics: MSE, compression ratio, variance retained, quality score
+- 🏛️ Mathematical theory page with formulas for every step
 
 ---
 
-## Architecture
-
-```
-cse275cs2/
-├── backend/
-│   ├── main.py          # FastAPI app — REST endpoints
-│   ├── model.py         # MNISTManager (lazy) + PCAManager
-│   ├── utils.py         # patch extraction, PCA pipeline, base64 encode
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Home.jsx       # Overview page — pipeline diagram, glossary
-│   │   │   └── Dashboard.jsx  # Compression UI — upload, slider, images, metrics
-│   │   ├── components/
-│   │   │   └── Navbar.jsx
-│   │   ├── api.js             # Axios API layer
-│   │   └── index.css          # Gray/white design system
-│   ├── package.json
-│   └── vite.config.js
-└── run.sh               # One-command startup
-```
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/sample` | Returns a random MNIST digit as a 784-dim array |
-| `POST` | `/process_image?n_components=k&patch_size=8` | **Main endpoint** — patch-based PCA on any uploaded image |
-| `POST` | `/process` | MNIST flat-vector PCA (784D input) |
-| `POST` | `/train` | Pre-trains and caches a PCA model for given k |
-| `POST` | `/compress` | Compress a 784-dim MNIST vector to k components |
-| `POST` | `/reconstruct` | Reconstruct from a compressed vector |
-
-### `/process_image` — Request
+## 🚀 Quick Start (one-time setup)
 
 ```bash
-curl -X POST "http://localhost:8000/process_image?n_components=20&patch_size=8" \
-     -F "file=@myimage.jpg"
+# 1. Clone the repository
+git clone https://github.com/ritheshh-cmyk/imagedim.git
+cd imagedim
+
+# 2. Run setup (installs deps + downloads pre-trained model)
+bash setup.sh
+
+# 3. Start both backend and frontend
+./start.sh
 ```
 
-### `/process_image` — Response
+Then open **http://localhost:5173** in your browser.
 
-```json
-{
-  "original_image_b64": "data:image/png;base64,…",
-  "reconstructed_image_b64": "data:image/png;base64,…",
-  "compression_ratio": 4.57,
-  "mse": 12.34,
-  "n_components": 20,
-  "patch_size": 8,
-  "n_patches": 3456,
-  "original_resolution": "600×450",
-  "variance_retained_pct": 91.3
-}
-```
+> **The pre-trained model (~930 KB) is downloaded automatically** in step 2.
+> If the download fails, the server trains it on first launch (~10 seconds, one-time).
 
 ---
 
-## Setup & Run
-
-### Requirements
-
-- Python 3.9+
-- Node.js 18+
-
-### One-command startup
+## 📦 Manual Setup (if you prefer step-by-step)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/cse275cs2.git
-cd cse275cs2
-bash run.sh
-```
-
-This will:
-1. Create a Python virtual environment
-2. Start the FastAPI backend on `http://localhost:8000`
-3. Start the Vite frontend on `http://localhost:5173`
-
-### Manual setup
-
-```bash
-# Backend
+# Python backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+# Frontend
+cd frontend && npm install && cd ..
+
+# Download pre-trained model (optional — auto-trains if missing)
+curl -fsSL https://github.com/ritheshh-cmyk/imagedim/releases/download/v1.0.0/pca_master_k150.pkl \
+     -o backend/pca_master_k150.pkl
+
+# Start
+./start.sh
 ```
 
 ---
 
-## Tech Stack
+## 🏗️ Architecture
 
-| Layer | Technology |
-|-------|-----------|
-| Backend framework | FastAPI + Uvicorn |
-| PCA engine | scikit-learn `PCA(svd_solver='randomized')` |
-| Image processing | Pillow (PIL) |
-| Numerical core | NumPy |
-| Frontend framework | React 19 + Vite 8 |
-| Routing | React Router v7 |
-| HTTP client | Axios |
-| CSS | Tailwind CSS v4 + Custom design system |
-| Icons | Lucide React |
-| Dataset (optional) | MNIST via `fetch_openml` (lazy-loaded) |
+```
+imagedim/
+├── backend/
+│   ├── main.py          # FastAPI app, lifespan startup, endpoints
+│   ├── model.py         # PCAManager — disk-cached master model (k=150)
+│   ├── utils.py         # Image preprocessing, patch-PCA for HD images
+│   └── requirements.txt
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── Home.jsx       # Landing page
+│       │   ├── Dashboard.jsx  # Compression lab
+│       │   ├── Analytics.jsx  # Accuracy charts (pure SVG)
+│       │   └── Theory.jsx     # Math theory
+│       ├── components/
+│       │   └── Navbar.jsx     # Fixed pill navbar (4 links)
+│       └── api.js             # Axios client
+├── setup.sh   # First-time setup (run once)
+├── start.sh   # Start backend + frontend together
+└── README.md
+```
+
+### Backend endpoints
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/sample` | Random MNIST digit |
+| `POST` | `/process` | Compress MNIST digit (JSON, 784 floats) |
+| `POST` | `/process_image` | Compress uploaded image (multipart, any size) |
+| `GET` | `/api/sweep_mnist` | k-sweep metrics for Analytics page |
+| `POST` | `/train` | Pre-cache a specific k model |
+
+### Tech stack
+
+| Layer | Tech |
+|---|---|
+| **Frontend** | React 18 + Vite + React Router |
+| **Styling** | Vanilla CSS + glassmorphism |
+| **Backend** | FastAPI + uvicorn |
+| **ML** | scikit-learn PCA (randomized SVD) |
+| **Model persistence** | joblib |
+| **Charts** | Pure SVG (zero chart library deps) |
 
 ---
 
-## Design Decisions
+## 🧮 How the PCA Compression Works
 
-**Why patch-based?**  
-Flattening an entire HD image into one vector (e.g., 1920×1080×3 = 6.2M dims) makes PCA impractical. Splitting into 8×8 patches (192D each) keeps the covariance matrix at 192×192 — trivially fast to decompose.
+1. **Train once** — Fit `PCA(k=150)` on 2000 MNIST digits (or the first uploaded image batch). Saved to `backend/pca_master_k150.pkl`.
+2. **Compress** — Project the 784-dimensional pixel vector onto the top-k principal axes → k-dimensional latent vector.
+3. **Reconstruct** — Multiply back through the component matrix + add mean → approximate image.
+4. **HD images** — Split into 16×16 patches, apply patch-level PCA, reassemble.
 
-**Why randomised SVD?**  
-sklearn's `svd_solver='randomized'` only computes the top-k singular values/vectors, making it O(n·k) instead of O(n³). Perfect for incremental dimensionality reduction.
-
-**Why lazy-loading MNIST?**  
-The MNIST dataset is 55MB. Loading it at server startup would freeze the backend every cold boot. It's only fetched from OpenML if you explicitly click "Load Random MNIST Digit".
+The Analytics page plots MSE, variance retained, and compression ratio for every k from 1 to 150 — computed in a single backend call by slicing the master model's component matrix.
 
 ---
 
-## License
+## ⚙️ Configuration
 
-MIT — free to use, modify, and distribute.
+| Variable | Default | Description |
+|---|---|---|
+| Backend port | `8000` | Change in `start.sh` |
+| Frontend port | `5173` | Change in `start.sh` |
+| Max k | `150` | `MASTER_K` in `backend/model.py` |
+| Patch size (HD) | `16px` | `patch_size` param in `/process_image` |
+| MNIST samples | `2000` | `MAX_SAMPLES` in `backend/model.py` |
+
+---
+
+## 📋 Requirements
+
+- **Python** 3.9+
+- **Node.js** 18+ and npm
+- ~1 GB disk (MNIST download on first train) / or just the 930 KB `.pkl` (auto-downloaded)
+- No GPU required — runs on CPU
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE)
+
+---
+
+<p align="center">Built by <a href="https://github.com/ritheshh-cmyk">ritheshh-cmyk</a></p>
