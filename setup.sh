@@ -59,18 +59,32 @@ ok "node_modules ready"
 cd "$ROOT"
 
 # ── 4. Pre-trained model ──────────────────────────────────────
-step "4/5" "Setting up pre-trained PCA model…"
+step "4/5" "Setting up pre-trained models & data cache…"
 MODEL_PATH="$ROOT/backend/pca_master_k150.pkl"
-MODEL_URL="https://github.com/ritheshh-cmyk/imagedim/releases/download/v1.0.0/pca_master_k150.pkl"
+NPY_PATH="$ROOT/backend/mnist_samples_2000.npy"
+BASE_URL="https://github.com/ritheshh-cmyk/imagedim/releases/download/v1.0.0"
 
+# Download PCA model
 if [ -f "$MODEL_PATH" ]; then
-  ok "Model already exists → skipping download"
+  ok "PCA model already exists → skipping"
 else
-  echo -e "  ${C}↓${N}  Downloading pre-trained model (~930 KB)…"
-  if curl -fsSL "$MODEL_URL" -o "$MODEL_PATH" 2>/dev/null; then
-    ok "Model downloaded from GitHub Releases"
+  echo -e "  ${C}↓${N}  Downloading PCA model (~930 KB)…"
+  if curl -fsSL "$BASE_URL/pca_master_k150.pkl" -o "$MODEL_PATH" 2>/dev/null; then
+    ok "PCA model downloaded"
   else
-    warn "Download failed — will train model on first server start (~10s, one-time)"
+    warn "PCA download failed — will train on first server start (~10s, one-time)"
+  fi
+fi
+
+# Download MNIST sample cache (avoids ~100MB MNIST download forever)
+if [ -f "$NPY_PATH" ]; then
+  ok "MNIST sample cache already exists → skipping"
+else
+  echo -e "  ${C}↓${N}  Downloading MNIST sample cache (~6 MB)…"
+  if curl -fsSL "$BASE_URL/mnist_samples_2000.npy" -o "$NPY_PATH" 2>/dev/null; then
+    ok "MNIST cache downloaded — MNIST will never need to be fetched again"
+  else
+    warn "MNIST cache download failed — will download MNIST once on first request"
   fi
 fi
 

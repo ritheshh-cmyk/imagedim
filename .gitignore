@@ -16,3 +16,4 @@ __pycache__/
 # OS
 .DS_Store
 backend/pca_master_k150.pkl
+backend/mnist_samples_2000.npy

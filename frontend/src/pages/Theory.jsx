@@ -20,35 +20,70 @@ const MathBlock = ({ children, label }) => (
 
 const SectionCard = ({ icon, title, index, children }) => {
   const [open, setOpen] = useState(true);
+  const bodyRef = useRef(null);
+  const [height, setHeight] = useState('auto');
+
+  useEffect(() => {
+    if (!bodyRef.current) return;
+    if (open) {
+      const h = bodyRef.current.scrollHeight;
+      setHeight(`${h}px`);
+      // let it settle then release to 'auto' so re-renders work
+      const t = setTimeout(() => setHeight('auto'), 300);
+      return () => clearTimeout(t);
+    } else {
+      // snap to current height first, then animate to 0
+      setHeight(`${bodyRef.current.scrollHeight}px`);
+      requestAnimationFrame(() => requestAnimationFrame(() => setHeight('0px')));
+    }
+  }, [open]);
+
   return (
-    <div style={{
-      background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(14px)',
-      border: '1px solid #E5E7EB', borderRadius: '20px',
-      overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-      marginBottom: '20px',
-      transition: 'box-shadow 0.2s ease',
-    }}>
+    <div
+      style={{
+        background: '#fff',
+        border: '1px solid #E9EAEC', borderRadius: '16px',
+        overflow: 'hidden',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+        marginBottom: '16px',
+        transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)'; }}
+    >
       <button
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: '14px',
-          padding: '22px 26px', background: 'none', border: 'none', cursor: 'pointer',
+          padding: '20px 24px', background: 'none', border: 'none', cursor: 'pointer',
           textAlign: 'left',
         }}
       >
         <span style={{
-          width: '36px', height: '36px', borderRadius: '10px', background: '#111827',
+          width: '36px', height: '36px', borderRadius: '10px', background: '#0F172A',
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0,
         }}>
           {icon}
         </span>
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#9CA3AF' }}>Step {index}</p>
-          <h2 style={{ fontSize: '1.0625rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>{title}</h2>
+          <p style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#94A3B8', marginBottom: 2 }}>Step {index}</p>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.02em' }}>{title}</h2>
         </div>
-        <ChevronDown size={18} color="#9CA3AF" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s ease' }} />
+        <ChevronDown size={16} color="#94A3B8" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s ease', flexShrink: 0 }} />
       </button>
-      {open && <div style={{ padding: '0 26px 26px', borderTop: '1px solid #F3F4F6' }}>{children}</div>}
+      {/* Animated body */}
+      <div
+        ref={bodyRef}
+        style={{
+          height,
+          overflow: 'hidden',
+          transition: 'height 0.28s cubic-bezier(0.4,0,0.2,1)',
+        }}
+      >
+        <div style={{ padding: '0 24px 24px', borderTop: '1px solid #F1F5F9' }}>
+          {children}
+        </div>
+      </div>
     </div>
   );
 };
@@ -72,15 +107,15 @@ export default function Theory() {
     <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingTop: '60px', paddingBottom: '80px' }}>
 
       {/* Hero */}
-      <div style={{ maxWidth: '860px', margin: '0 auto', padding: '0 24px 40px' }}>
-        <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: '#9CA3AF', marginBottom: '6px' }}>
+      <div style={{ maxWidth: '860px', margin: '0 auto', padding: '40px 24px 40px' }}>
+        <p style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94A3B8', marginBottom: '8px' }}>
           Mathematical Theory
         </p>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#111827', letterSpacing: '-0.04em', lineHeight: 1.1, marginBottom: '14px' }}>
+        <h1 style={{ fontSize: 'clamp(2rem,5vw,2.75rem)', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '16px' }}>
           How Principal Component<br/>Analysis Works
         </h1>
-        <p style={{ fontSize: '1rem', color: '#6B7280', lineHeight: 1.7, maxWidth: '600px' }}>
-          PCA finds the axes (directions) in high-dimensional space that capture the most variance. 
+        <p style={{ fontSize: '1rem', color: '#64748B', lineHeight: 1.75, maxWidth: '560px' }}>
+          PCA finds the axes (directions) in high-dimensional space that capture the most variance.
           By projecting data onto only the top-k such axes, we achieve compression with minimal information loss.
         </p>
 
@@ -92,13 +127,19 @@ export default function Theory() {
             { label: 'Max compression', value: '78×', sub: 'at k=10' },
             { label: 'Algorithm', value: 'rSVD', sub: 'randomized SVD' },
           ].map(s => (
-            <div key={s.label} style={{
-              background: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px',
-              padding: '12px 18px', minWidth: '110px',
-            }}>
-              <p style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9CA3AF' }}>{s.label}</p>
-              <p style={{ fontSize: '1.375rem', fontWeight: 900, color: '#111827', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>{s.value}</p>
-              <p style={{ fontSize: '0.6875rem', color: '#9CA3AF' }}>{s.sub}</p>
+            <div key={s.label}
+              style={{
+                background: '#fff', border: '1px solid #E9EAEC', borderRadius: '12px',
+                padding: '14px 20px', minWidth: '110px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'; }}
+            >
+              <p style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94A3B8', marginBottom: 4 }}>{s.label}</p>
+              <p style={{ fontSize: '1.375rem', fontWeight: 800, color: '#0F172A', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1 }}>{s.value}</p>
+              <p style={{ fontSize: '0.6875rem', color: '#94A3B8', marginTop: 3 }}>{s.sub}</p>
             </div>
           ))}
         </div>
@@ -209,10 +250,14 @@ export default function Theory() {
 
         {/* HD Images note */}
         <div style={{
-          background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(14px)',
-          border: '1px solid #E5E7EB', borderRadius: '20px',
-          padding: '26px', boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-        }}>
+          background: '#fff',
+          border: '1px solid #E9EAEC', borderRadius: '16px',
+          padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)',
+          transition: 'box-shadow 0.2s ease',
+        }}
+          onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)'}
+          onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)'}
+        >
           <h2 style={{ fontSize: '1.0625rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em', marginBottom: '10px' }}>
             📸 HD Images — Patch-based PCA
           </h2>

@@ -244,10 +244,17 @@ const ModelPipeline = ({ results, isHD, patchSize, components }) => {
             { l: 'Latent Codes', v: `${(compressedDims / 1000).toFixed(0)}K floats`, sub: `${results.n_patches} × ${components}` },
             { l: 'Actual Saving', v: `${(totalDims / compressedDims).toFixed(1)}× patch reduction`, sub: 'codes only, excluding model weights' },
           ].map((m, i) => (
-            <div key={i} style={{ background: '#FAFAFA', border: '1px solid #F3F4F6', borderRadius: '10px', padding: '12px' }}>
-              <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', marginBottom: '4px' }}>{m.l}</div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>{m.v}</div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#9CA3AF', marginTop: '2px' }}>{m.sub}</div>
+            <div key={i}
+              style={{
+                background: '#F8FAFC', border: '1px solid #F1F5F9', borderRadius: '10px', padding: '14px',
+                transition: 'box-shadow 0.18s ease, transform 0.18s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.07)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+            >
+              <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94A3B8', marginBottom: '6px' }}>{m.l}</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.875rem', fontWeight: 700, color: '#0F172A' }}>{m.v}</div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.65rem', color: '#94A3B8', marginTop: '3px' }}>{m.sub}</div>
             </div>
           ))}
         </div>
@@ -362,14 +369,14 @@ export default function Dashboard() {
     <div style={{ minHeight: '100vh', background: '#F8FAFC', paddingTop: '60px' }}>
 
 
-      <div style={{ maxWidth: '1380px', margin: '0 auto', padding: '28px 24px 80px' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px 80px' }}>
 
         {/* ── Page Header ── */}
-        <header style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 900, color: '#111827', letterSpacing: '-0.04em' }}>
+        <header style={{ marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#0F172A', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
             PCA Compression Lab
           </h1>
-          <p style={{ fontSize: '0.875rem', color: '#9CA3AF', marginTop: '4px' }}>
+          <p style={{ fontSize: '0.875rem', color: '#64748B', marginTop: '6px', lineHeight: 1.6 }}>
             Upload an image or use MNIST · Adjust k components · Observe quality vs size trade-off in real time
           </p>
         </header>
@@ -378,15 +385,16 @@ export default function Dashboard() {
         {error && (
           <div style={{
             background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626',
-            padding: '12px 16px', borderRadius: '12px', marginBottom: '20px',
-            display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8125rem',
+            padding: '12px 16px', borderRadius: '10px', marginBottom: '24px',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            fontSize: '0.8125rem', fontWeight: 500,
           }}>
             <X size={14} style={{ flexShrink: 0 }} /> {error}
           </div>
         )}
 
         {/* ══ ROW 1: Controls + Images ══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
 
           {/* ── Controls ── */}
           <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '0' }}>
