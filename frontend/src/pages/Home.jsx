@@ -139,7 +139,7 @@ export default function Home() {
           <div className="hero-badge" style={{ marginBottom: '24px', opacity: 0 }}>
             <span className="badge">
               <span className="live-dot" />
-              PCA · Dimensionality Reduction · Linear Algebra
+              PCA · Linear Algebra
             </span>
           </div>
 
