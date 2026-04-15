@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Analytics from './pages/Analytics';
 import Theory from './pages/Theory';
+import DockNavigation from './components/DockNavigation';
 import './index.css';
 
 const AppLayout = () => {
@@ -13,7 +14,8 @@ const AppLayout = () => {
   return (
     <div style={{ minHeight: '100vh', background: '#F5F6F8' }}>
       <Navbar />
-      <main key={location.pathname}>
+      <DockNavigation />
+      <main key={location.pathname} style={{ paddingBottom: '100px' }}>
         <Routes>
           <Route path="/"          element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />

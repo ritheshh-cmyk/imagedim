@@ -38,32 +38,7 @@ const Navbar = () => {
           </span>
         </NavLink>
 
-        {/* Nav links */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[
-            { to: '/', label: 'Overview',  icon: null, end: true },
-            { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={13} /> },
-            { to: '/analytics', label: 'Analytics',  icon: <BarChart2 size={13} /> },
-            { to: '/theory',    label: 'Theory',     icon: <BookOpen size={13} /> },
-          ].map(({ to, label, icon, end }) => (
-            <NavLink key={to} to={to} end={end}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px', borderRadius: 7,
-                fontSize: 13, fontWeight: isActive ? 600 : 400,
-                textDecoration: 'none',
-                color: isActive ? '#0F172A' : '#64748B',
-                background: isActive ? 'rgba(15,23,42,0.06)' : 'transparent',
-                transition: 'all .15s ease',
-              })}
-              onMouseEnter={e => { if (!e.currentTarget.style.background.includes('0.06')) e.currentTarget.style.background = 'rgba(15,23,42,0.04)'; e.currentTarget.style.color = '#0F172A'; }}
-              onMouseLeave={e => { if (!e.currentTarget.style.background.includes('0.06')) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748B'; } }}
-            >
-              {icon}
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Middle items moved to Dock */}
 
         {/* CTA */}
         <NavLink to="/dashboard" style={{ textDecoration: 'none' }}>

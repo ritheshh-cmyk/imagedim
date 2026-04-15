@@ -23,24 +23,25 @@ A full-stack web application that compresses images using PCA (Principal Compone
 
 ---
 
-## 🚀 Quick Start (one-time setup)
+## 🚀 Quick Start (One-Click Start)
 
+**Windows:**
+1. Clone or download the repository.
+2. Navigate to the folder and double-click `run.bat` (It will automatically set up everything and launch the servers).
+
+**Linux / macOS:**
 ```bash
 # 1. Clone the repository
 git clone https://github.com/ritheshh-cmyk/imagedim.git
 cd imagedim
 
-# 2. Run setup (installs deps + downloads pre-trained model)
-bash setup.sh
-
-# 3. Start both backend and frontend
-./start.sh
+# 2. Run the start script
+bash run.sh
 ```
 
 Then open **http://localhost:5173** in your browser.
 
-> **The pre-trained model (~930 KB) is downloaded automatically** in step 2.
-> If the download fails, the server trains it on first launch (~10 seconds, one-time).
+> **Note:** The script automatically sets up the Python virtual environment, installs Node modules, and downloads the pre-trained PCA model (~930 KB). Zero manual setup required.
 
 ---
 
@@ -60,7 +61,7 @@ curl -fsSL https://github.com/ritheshh-cmyk/imagedim/releases/download/v1.0.0/pc
      -o backend/pca_master_k150.pkl
 
 # Start
-./start.sh
+bash run.sh
 ```
 
 ---
@@ -84,8 +85,8 @@ imagedim/
 │       ├── components/
 │       │   └── Navbar.jsx     # Fixed pill navbar (4 links)
 │       └── api.js             # Axios client
-├── setup.sh   # First-time setup (run once)
-├── start.sh   # Start backend + frontend together
+├── run.sh       # One-click start script (macOS/Linux)
+├── run.bat      # One-click start script (Windows)
 └── README.md
 ```
 
@@ -127,8 +128,8 @@ The Analytics page plots MSE, variance retained, and compression ratio for every
 
 | Variable | Default | Description |
 |---|---|---|
-| Backend port | `8000` | Change in `start.sh` |
-| Frontend port | `5173` | Change in `start.sh` |
+| Backend port | `8000` | Change in `run.bat` / `run.sh` |
+| Frontend port | `5173` | Change in `run.bat` / `run.sh` |
 | Max k | `150` | `MASTER_K` in `backend/model.py` |
 | Patch size (HD) | `16px` | `patch_size` param in `/process_image` |
 | MNIST samples | `2000` | `MAX_SAMPLES` in `backend/model.py` |
